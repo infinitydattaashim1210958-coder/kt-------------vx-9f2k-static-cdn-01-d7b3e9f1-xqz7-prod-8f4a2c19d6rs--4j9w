@@ -112,6 +112,7 @@ class VedaRepository(
             level3 = l3,
             mantraNo = no,
             sanskrit = m.sanskritText?.trim().orEmpty(),
+            sanskritSwara = m.sanskritSwara?.trim(),
             rishi = m.rishi?.trim(),
             devata = m.devata?.trim(),
             chhanda = m.chhanda?.trim(),
