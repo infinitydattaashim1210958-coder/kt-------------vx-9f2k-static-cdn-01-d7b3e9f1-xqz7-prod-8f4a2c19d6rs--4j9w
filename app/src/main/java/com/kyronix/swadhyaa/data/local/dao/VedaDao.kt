@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Query
 import com.kyronix.swadhyaa.data.local.entity.MantraEntity
 import com.kyronix.swadhyaa.data.local.entity.ScholarEntity
+import com.kyronix.swadhyaa.data.local.entity.ScholarFieldEntity
 import com.kyronix.swadhyaa.data.local.entity.VedaEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -155,6 +156,9 @@ interface VedaDao {
 
     @Query("SELECT * FROM scholars WHERE veda_id = :vedaId ORDER BY display_order, name")
     suspend fun getScholarsForVeda(vedaId: Int): List<ScholarEntity>
+
+    @Query("SELECT * FROM scholar_fields WHERE scholar_id = :scholarId ORDER BY display_order")
+    suspend fun getFieldsForScholar(scholarId: Int): List<ScholarFieldEntity>
 
     @Query(
         """
