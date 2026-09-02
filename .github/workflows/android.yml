@@ -1,3 +1,22 @@
+# 01 — Update CI for `.db.gz` files
+
+## Problem
+GitHub Actions currently looks for:
+- `core.db`
+- `ramayana_core.db`
+
+But the repository only has:
+- `core.db.gz`
+- `ramayana_core.db.gz`
+
+## Fix
+Replace the content of `.github/workflows/android.yml` with the version below.
+
+---
+
+### File: `.github/workflows/android.yml`
+
+```yaml
 name: Android Build + Database Gate
 
 on:
@@ -25,7 +44,18 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Grant execute permission for gradlew
-        run: chmod +x gradlew || true
+        run: chmod +x gradlew
+
+      - name: Decompress database assets
+        run: |
+          echo "=== Decompressing .db.gz assets ==="
+          cd app/src/main/assets/databases
+          gunzip -k -f core.db.gz
+          gunzip -k -f ramayana_core.db.gz
+          ls -lh
+          test -f core.db
+          test -f ramayana_core.db
+          echo "Decompression successful"
 
       - name: Database asset presence check
         run: |
@@ -36,14 +66,7 @@ jobs:
           echo "Assets present"
 
       - name: Run unit tests (includes real DB count verification)
-        run: |
-          if [ -f gradlew ]; then
-            ./gradlew :app:testDebugUnitTest --stacktrace
-          else
-            # First-time bootstrap: generate wrapper then test
-            gradle wrapper --gradle-version 8.7
-            ./gradlew :app:testDebugUnitTest --stacktrace
-          fi
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
 
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
@@ -67,3 +90,13 @@ jobs:
           echo "shlokas=17802"
           echo "APK BUILD PASSED"
           echo "========================================"
+```
+
+---
+
+## How to apply on phone
+1. Open the repository on GitHub.
+2. Go to `.github/workflows/android.yml`
+3. Tap the pencil (Edit) icon.
+4. Delete everything and paste the content above.
+5. Commit with message: `fix CI to decompress .db.gz assets`
