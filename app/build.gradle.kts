@@ -16,9 +16,6 @@ android {
         versionName = "2.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    buildFeatures {
-        buildConfig = true
-    }
 
     buildTypes {
         release {
@@ -65,6 +62,10 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // ViewModel + Lifecycle
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.3")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
 
     // Unit test – pure JVM SQLite verification (no emulator needed)
     testImplementation("junit:junit:4.13.2")
