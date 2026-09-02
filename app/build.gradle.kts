@@ -16,6 +16,9 @@ android {
         versionName = "2.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+    buildFeatures {
+        buildConfig = true
+    }
 
     buildTypes {
         release {
