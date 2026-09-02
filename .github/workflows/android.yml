@@ -33,6 +33,8 @@ jobs:
           cd app/src/main/assets/databases
           gunzip -k -f core.db.gz
           gunzip -k -f ramayana_core.db.gz
+          # Remove the .gz files so only .db remains (avoids duplicate resource error)
+          rm -f core.db.gz ramayana_core.db.gz
           ls -lh
           test -f core.db
           test -f ramayana_core.db
