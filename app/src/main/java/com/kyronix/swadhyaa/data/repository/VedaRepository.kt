@@ -49,7 +49,7 @@ class VedaRepository(
 
     suspend fun getMantraAt(
         vedaId: Int,
-        level1: Int,
+        level1: Int?,
         level2: Int?,
         level3: Int?,
         mantraNo: Int
@@ -81,7 +81,7 @@ class VedaRepository(
 
     suspend fun getMantraNoList(
         vedaId: Int,
-        level1: Int,
+        level1: Int?,
         level2: Int?,
         level3: Int?
     ): List<Int> = withContext(Dispatchers.IO) {
