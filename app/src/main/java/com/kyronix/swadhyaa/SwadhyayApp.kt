@@ -10,10 +10,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Application entry point.
- *
- * Database integrity verification runs only in debug builds / CI.
- * Release builds skip the hard gate to avoid crashing users on
- * legitimate future schema evolution.
+ * Hard database gate is the unit test in CI.
  */
 class SwadhyayApp : Application() {
 
@@ -22,16 +19,12 @@ class SwadhyayApp : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        if (BuildConfig.DEBUG) {
-            appScope.launch {
-                val report = DatabaseVerifier.verify(this@SwadhyayApp)
-                if (!report.ok) {
-                    Log.e(TAG, "DATABASE INTEGRITY GATE FAILED: $report")
-                    // In CI the unit test is the authoritative gate.
-                    // Here we only log so the process can still start for debugging.
-                } else {
-                    Log.i(TAG, "DATABASE INTEGRITY GATE PASSED: $report")
-                }
+        appScope.launch {
+            val report = DatabaseVerifier.verify(this@SwadhyayApp)
+            if (!report.ok) {
+                Log.e(TAG, "DATABASE INTEGRITY GATE FAILED: $report")
+            } else {
+                Log.i(TAG, "DATABASE INTEGRITY GATE PASSED: $report")
             }
         }
     }
