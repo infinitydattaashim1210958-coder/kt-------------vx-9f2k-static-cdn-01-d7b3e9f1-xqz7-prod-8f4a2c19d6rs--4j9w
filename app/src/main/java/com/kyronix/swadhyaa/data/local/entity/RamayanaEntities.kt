@@ -5,13 +5,10 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-/**
- * Exact schema mirror of ramayana_core.db.
- * 6 kandas · 534 sargas · 17,802 shlokas.
- */
 @Entity(tableName = "kandas")
 data class KandaEntity(
-    @PrimaryKey val id: Int,
+    @PrimaryKey
+    val id: Int?,
     val name: String,
     @ColumnInfo(name = "english_name") val englishName: String?,
     @ColumnInfo(name = "sarga_count") val sargaCount: Int?
@@ -22,7 +19,8 @@ data class KandaEntity(
     indices = [Index(value = ["kanda_id"], name = "idx_sargas_kanda")]
 )
 data class SargaEntity(
-    @PrimaryKey val id: Int,
+    @PrimaryKey
+    val id: Int?,
     @ColumnInfo(name = "kanda_id") val kandaId: Int,
     val chapter: Int,
     val name: String?
@@ -36,7 +34,8 @@ data class SargaEntity(
     ]
 )
 data class ShlokaEntity(
-    @PrimaryKey val id: Int,
+    @PrimaryKey
+    val id: Int?,
     @ColumnInfo(name = "kanda_id") val kandaId: Int,
     @ColumnInfo(name = "sarga_id") val sargaId: Int,
     val sanskrit: String
