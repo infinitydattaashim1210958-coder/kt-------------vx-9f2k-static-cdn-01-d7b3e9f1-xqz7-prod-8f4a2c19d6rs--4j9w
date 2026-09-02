@@ -1,22 +1,3 @@
-# 01 — Update CI for `.db.gz` files
-
-## Problem
-GitHub Actions currently looks for:
-- `core.db`
-- `ramayana_core.db`
-
-But the repository only has:
-- `core.db.gz`
-- `ramayana_core.db.gz`
-
-## Fix
-Replace the content of `.github/workflows/android.yml` with the version below.
-
----
-
-### File: `.github/workflows/android.yml`
-
-```yaml
 name: Android Build + Database Gate
 
 on:
@@ -90,13 +71,3 @@ jobs:
           echo "shlokas=17802"
           echo "APK BUILD PASSED"
           echo "========================================"
-```
-
----
-
-## How to apply on phone
-1. Open the repository on GitHub.
-2. Go to `.github/workflows/android.yml`
-3. Tap the pencil (Edit) icon.
-4. Delete everything and paste the content above.
-5. Commit with message: `fix CI to decompress .db.gz assets`
