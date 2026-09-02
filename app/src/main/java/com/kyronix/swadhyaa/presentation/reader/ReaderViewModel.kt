@@ -19,7 +19,8 @@ data class ReaderUiState(
     val level1Options: List<Int> = emptyList(),
     val level2Options: List<Int> = emptyList(),
     val level3Options: List<Int> = emptyList(),
-    val mantraNoOptions: List<Int> = emptyList()
+    val mantraNoOptions: List<Int> = emptyList(),
+    val jumpError: String? = null
 )
 
 class ReaderViewModel(
@@ -91,11 +92,16 @@ class ReaderViewModel(
 
     fun jumpMantraNo(mantraNo: Int) {
         val cur = _state.value.current ?: return
-        val l1 = cur.level1 ?: return
         viewModelScope.launch {
-            repository.getMantraAt(
-                cur.vedaId, l1, cur.level2, cur.level3, mantraNo
-            )?.let { applyMantra(it) }
+            _state.value = _state.value.copy(jumpError = null)
+            val result = repository.getMantraAt(
+                cur.vedaId, cur.level1, cur.level2, cur.level3, mantraNo
+            )
+            if (result != null) {
+                applyMantra(result)
+            } else {
+                _state.value = _state.value.copy(jumpError = "মন্ত্র নং $mantraNo পাওয়া যায়নি")
+            }
         }
     }
 
@@ -105,12 +111,11 @@ class ReaderViewModel(
         val l3List = if (m.level1 != null && m.level2 != null) {
             repository.getLevel3List(m.vedaId, m.level1, m.level2)
         } else emptyList()
-        val noList = if (m.level1 != null) {
-            repository.getMantraNoList(m.vedaId, m.level1, m.level2, m.level3)
-        } else emptyList()
+        val noList = repository.getMantraNoList(m.vedaId, m.level1, m.level2, m.level3)
         _state.value = _state.value.copy(
             loading = false,
             error = null,
+            jumpError = null,
             current = m,
             level1Options = l1List,
             level2Options = l2List,

@@ -3,13 +3,16 @@ package com.kyronix.swadhyaa.presentation.reader
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import android.text.InputType
 import android.util.TypedValue
 import android.view.Gravity
 import android.widget.Button
+import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -185,6 +188,9 @@ class ReaderActivity : AppCompatActivity() {
                     statusText.text = "${m.vedaName} · id ${m.id}"
                     renderVedaChips(s)
                     renderJump(s)
+                    if (s.jumpError != null) {
+                        Toast.makeText(this@ReaderActivity, s.jumpError, Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -211,11 +217,29 @@ class ReaderActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Veda-specific numbering scheme, keyed by veda code:
+     *  - rigveda:      মণ্ডল / সূক্ত / মন্ত্র
+     *  - samaveda:     শুধু মন্ত্র
+     *  - yajurveda:    অধ্যায় / মন্ত্র
+     *  - atharvaveda:  কাণ্ড / সূক্ত / মন্ত্র
+     */
+    private data class JumpScheme(val level1Label: String?, val level2Label: String?)
+
+    private fun schemeFor(vedaCode: String): JumpScheme = when (vedaCode.lowercase()) {
+        "rigveda" -> JumpScheme("মণ্ডল", "সূক্ত")
+        "samaveda" -> JumpScheme(null, null)
+        "yajurveda" -> JumpScheme("অধ্যায়", null)
+        "atharvaveda" -> JumpScheme("কাণ্ড", "সূক্ত")
+        else -> JumpScheme("মণ্ডল", "সূক্ত")
+    }
+
     private fun renderJump(s: ReaderUiState) {
         jumpRow.removeAllViews()
         val m = s.current ?: return
+        val scheme = schemeFor(m.vedaCode)
 
-        fun addJump(label: String, value: String, options: List<Int>, onPick: (Int) -> Unit) {
+        fun addListJump(label: String, value: String, options: List<Int>, onPick: (Int) -> Unit) {
             val box = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 setBackgroundColor(SURFACE)
@@ -249,8 +273,67 @@ class ReaderActivity : AppCompatActivity() {
             jumpRow.addView(box, lp)
         }
 
-        addJump("MANDAL", "${m.level1 ?: "—"}", s.level1Options) { vm.jumpLevel1(it) }
-        addJump("SUKTA", "${m.level2 ?: "—"}", s.level2Options) { vm.jumpLevel2(it) }
-        addJump("MANTRA", "${m.mantraNo ?: "—"}", s.mantraNoOptions) { vm.jumpMantraNo(it) }
+        // মন্ত্র নং লিখে "ঠিক আছে" চাপার সিস্টেম — লম্বা তালিকা স্ক্রল করার বদলে সরাসরি সংখ্যা লেখা যায়।
+        // এটাই সামবেদের ১৮৭৫+ মন্ত্রের মধ্যে খোঁজার জন্য মূল সমাধান, বাকি বেদেও একই সিস্টেম ব্যবহার হচ্ছে।
+        fun addMantraNoJump(value: String, options: List<Int>, onPick: (Int) -> Unit) {
+            val box = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setBackgroundColor(SURFACE)
+                setPadding(dp(12), dp(8), dp(12), dp(8))
+                setOnClickListener {
+                    val input = EditText(this@ReaderActivity).apply {
+                        inputType = InputType.TYPE_CLASS_NUMBER
+                        hint = if (options.isNotEmpty())
+                            "${options.first()} - ${options.last()}"
+                        else "মন্ত্র নং"
+                        setText(value.takeIf { it != "—" }.orEmpty())
+                        setSelection(text.length)
+                    }
+                    val container = LinearLayout(this@ReaderActivity).apply {
+                        orientation = LinearLayout.VERTICAL
+                        setPadding(dp(20), dp(12), dp(20), dp(0))
+                        addView(input)
+                    }
+                    AlertDialog.Builder(this@ReaderActivity)
+                        .setTitle("মন্ত্র নং লিখুন")
+                        .setView(container)
+                        .setPositiveButton("ঠিক আছে") { _, _ ->
+                            val no = input.text.toString().trim().toIntOrNull()
+                            if (no != null) onPick(no)
+                            else Toast.makeText(
+                                this@ReaderActivity, "সঠিক সংখ্যা লিখুন", Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        .setNegativeButton("বাতিল", null)
+                        .show()
+                }
+            }
+            val l = TextView(this).apply {
+                text = "মন্ত্র"
+                setTextColor(MUTED)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                gravity = Gravity.CENTER
+            }
+            val v = TextView(this).apply {
+                text = value
+                setTextColor(IVORY)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                gravity = Gravity.CENTER
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            box.addView(l)
+            box.addView(v)
+            val lp = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginEnd = dp(6) }
+            jumpRow.addView(box, lp)
+        }
+
+        if (scheme.level1Label != null) {
+            addListJump(scheme.level1Label, "${m.level1 ?: "—"}", s.level1Options) { vm.jumpLevel1(it) }
+        }
+        if (scheme.level2Label != null) {
+            addListJump(scheme.level2Label, "${m.level2 ?: "—"}", s.level2Options) { vm.jumpLevel2(it) }
+        }
+        addMantraNoJump("${m.mantraNo ?: "—"}", s.mantraNoOptions) { vm.jumpMantraNo(it) }
     }
 }
