@@ -80,6 +80,63 @@ interface VedaDao {
 
     @Query(
         """
+        SELECT DISTINCT level3 FROM mantras
+        WHERE veda_id = :vedaId AND level1 = :level1 AND level2 = :level2
+          AND level3 IS NOT NULL
+        ORDER BY level3
+        """
+    )
+    suspend fun getLevel3List(vedaId: Int, level1: Int, level2: Int): List<Int>
+
+    @Query(
+        """
+        SELECT DISTINCT mantra_no FROM mantras
+        WHERE veda_id = :vedaId
+          AND level1 = :level1
+          AND (:level2 IS NULL OR level2 = :level2)
+          AND (:level3 IS NULL OR level3 = :level3)
+          AND mantra_no IS NOT NULL
+        ORDER BY mantra_no
+        """
+    )
+    suspend fun getMantraNoList(
+        vedaId: Int,
+        level1: Int,
+        level2: Int?,
+        level3: Int?
+    ): List<Int>
+
+    @Query(
+        """
+        SELECT * FROM mantras
+        WHERE veda_id = :vedaId
+          AND level1 = :level1
+          AND (:level2 IS NULL OR level2 = :level2)
+          AND (:level3 IS NULL OR level3 = :level3)
+          AND mantra_no = :mantraNo
+        LIMIT 1
+        """
+    )
+    suspend fun getMantraAt(
+        vedaId: Int,
+        level1: Int,
+        level2: Int?,
+        level3: Int?,
+        mantraNo: Int
+    ): MantraEntity?
+
+    @Query(
+        """
+        SELECT * FROM mantras
+        WHERE veda_id = :vedaId
+        ORDER BY level1, level2, level3, mantra_no, id
+        LIMIT 1
+        """
+    )
+    suspend fun getFirstMantra(vedaId: Int): MantraEntity?
+
+    @Query(
+        """
         SELECT * FROM mantras
         WHERE veda_id = :vedaId AND id > :currentId
         ORDER BY id LIMIT 1
@@ -108,5 +165,4 @@ interface VedaDao {
         """
     )
     suspend fun getScholarsForMantra(mantraId: Int): List<ScholarEntity>
-
 }
