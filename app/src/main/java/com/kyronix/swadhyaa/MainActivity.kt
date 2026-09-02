@@ -1,5 +1,6 @@
 package com.kyronix.swadhyaa
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.util.TypedValue
@@ -15,11 +16,11 @@ import com.kyronix.swadhyaa.data.local.CoreDatabase
 import com.kyronix.swadhyaa.data.repository.VedaRepository
 import com.kyronix.swadhyaa.presentation.home.HomeUiState
 import com.kyronix.swadhyaa.presentation.home.HomeViewModel
+import com.kyronix.swadhyaa.presentation.reader.ReaderActivity
 import kotlinx.coroutines.launch
 
 /**
- * Minimal Home — programmatic UI (no XML layout dependency).
- * Proves: Room → Repository → ViewModel → UI with real core.db data.
+ * Home — 4 Vedas from core.db. Tap opens Reader.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -30,7 +31,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var statusText: TextView
-    private lateinit var vedaListText: TextView
+    private lateinit var vedaList: LinearLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -42,27 +43,25 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(Color.parseColor("#0F0D0A"))
             setFillViewport(true)
         }
-
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(24), dp(24), dp(24))
         }
 
-        val title = TextView(this).apply {
+        column.addView(TextView(this).apply {
             text = "স্বাধ্যায়"
             setTextColor(Color.parseColor("#F5E6C8"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 28f)
             setPadding(0, 0, 0, dp(8))
             textAlignment = TextView.TEXT_ALIGNMENT_CENTER
-        }
-
-        val subtitle = TextView(this).apply {
+        })
+        column.addView(TextView(this).apply {
             text = "সনাতন ধর্মশাস্ত্র"
             setTextColor(Color.parseColor("#C4A574"))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, 0, 0, dp(24))
             textAlignment = TextView.TEXT_ALIGNMENT_CENTER
-        }
+        })
 
         statusText = TextView(this).apply {
             text = "Loading…"
@@ -70,17 +69,13 @@ class MainActivity : AppCompatActivity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
             setPadding(0, 0, 0, dp(16))
         }
-
-        vedaListText = TextView(this).apply {
-            setTextColor(Color.parseColor("#F5E6C8"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            setLineSpacing(0f, 1.3f)
-        }
-
-        column.addView(title)
-        column.addView(subtitle)
         column.addView(statusText)
-        column.addView(vedaListText)
+
+        vedaList = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        column.addView(vedaList)
+
         root.addView(column)
         setContentView(root)
 
@@ -90,17 +85,31 @@ class MainActivity : AppCompatActivity() {
                     when (state) {
                         is HomeUiState.Loading -> {
                             statusText.text = "Loading from core.db…"
-                            vedaListText.text = ""
+                            vedaList.removeAllViews()
                         }
                         is HomeUiState.Success -> {
                             statusText.text = "Database OK — ${state.totalMantras} mantras total"
-                            vedaListText.text = state.vedas.joinToString("\n\n") { v ->
-                                "• ${v.name} (${v.code})\n  Mantras: ${v.mantraCount}"
+                            vedaList.removeAllViews()
+                            state.vedas.forEach { v ->
+                                val row = TextView(this@MainActivity).apply {
+                                    text = "• ${v.name} (${v.code})\n  Mantras: ${v.mantraCount}"
+                                    setTextColor(Color.parseColor("#F5E6C8"))
+                                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                                    setLineSpacing(0f, 1.3f)
+                                    setPadding(0, dp(12), 0, dp(12))
+                                    setOnClickListener {
+                                        startActivity(
+                                            Intent(this@MainActivity, ReaderActivity::class.java)
+                                                .putExtra(ReaderActivity.EXTRA_VEDA_ID, v.id)
+                                        )
+                                    }
+                                }
+                                vedaList.addView(row)
                             }
                         }
                         is HomeUiState.Error -> {
                             statusText.text = "Error: ${state.message}"
-                            vedaListText.text = ""
+                            vedaList.removeAllViews()
                         }
                     }
                 }
