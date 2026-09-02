@@ -65,16 +65,4 @@ interface RamayanaDao {
     @Query("SELECT COUNT(*) FROM shlokas WHERE kanda_id = :kandaId")
     suspend fun getShlokaCount(kandaId: Int): Int
 
-    /**
-     * FTS5 search over Sanskrit text.
-     */
-    @Query(
-        """
-        SELECT s.* FROM shlokas s
-        INNER JOIN shlokas_fts fts ON fts.rowid = s.id
-        WHERE shlokas_fts MATCH :ftsQuery
-        LIMIT :limit
-        """
-    )
-    suspend fun searchShlokas(ftsQuery: String, limit: Int = 60): List<ShlokaEntity>
 }
