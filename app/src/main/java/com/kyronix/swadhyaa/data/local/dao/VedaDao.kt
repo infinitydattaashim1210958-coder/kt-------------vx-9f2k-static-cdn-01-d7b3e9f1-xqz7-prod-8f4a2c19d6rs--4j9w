@@ -109,17 +109,4 @@ interface VedaDao {
     )
     suspend fun getScholarsForMantra(mantraId: Int): List<ScholarEntity>
 
-    /**
-     * FTS5 search. Caller must escape query tokens for FTS syntax.
-     * Returns mantra ids ordered by rank.
-     */
-    @Query(
-        """
-        SELECT m.* FROM mantras m
-        INNER JOIN search_index si ON si.rowid = m.id
-        WHERE search_index MATCH :ftsQuery
-        LIMIT :limit
-        """
-    )
-    suspend fun searchMantras(ftsQuery: String, limit: Int = 60): List<MantraEntity>
 }
