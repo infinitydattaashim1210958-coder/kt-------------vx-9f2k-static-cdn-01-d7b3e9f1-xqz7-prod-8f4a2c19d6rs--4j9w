@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="#1A120B">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/titleText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="স্বাধ্যায়"
+            android:textSize="28sp"
+            android:textStyle="bold"
+            android:textColor="#F5E6C8"
+            android:gravity="center"
+            android:paddingBottom="8dp" />
+
+        <TextView
+            android:id="@+id/subtitleText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="সনাতন ধর্মশাস্ত্র"
+            android:textSize="14sp"
+            android:textColor="#C4A574"
+            android:gravity="center"
+            android:paddingBottom="24dp" />
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Loading…"
+            android:textSize="14sp"
+            android:textColor="#A89070"
+            android:paddingBottom="16dp" />
+
+        <TextView
+            android:id="@+id/vedaListText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="16sp"
+            android:textColor="#F5E6C8"
+            android:lineSpacingExtra="6dp"
+            android:fontFamily="monospace" />
+
+    </LinearLayout>
+</ScrollView>
