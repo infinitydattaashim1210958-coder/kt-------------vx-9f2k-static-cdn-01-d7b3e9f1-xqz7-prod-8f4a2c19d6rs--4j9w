@@ -92,7 +92,7 @@ interface VedaDao {
         """
         SELECT DISTINCT mantra_no FROM mantras
         WHERE veda_id = :vedaId
-          AND level1 = :level1
+          AND (:level1 IS NULL OR level1 = :level1)
           AND (:level2 IS NULL OR level2 = :level2)
           AND (:level3 IS NULL OR level3 = :level3)
           AND mantra_no IS NOT NULL
@@ -101,7 +101,7 @@ interface VedaDao {
     )
     suspend fun getMantraNoList(
         vedaId: Int,
-        level1: Int,
+        level1: Int?,
         level2: Int?,
         level3: Int?
     ): List<Int>
@@ -110,7 +110,7 @@ interface VedaDao {
         """
         SELECT * FROM mantras
         WHERE veda_id = :vedaId
-          AND level1 = :level1
+          AND (:level1 IS NULL OR level1 = :level1)
           AND (:level2 IS NULL OR level2 = :level2)
           AND (:level3 IS NULL OR level3 = :level3)
           AND mantra_no = :mantraNo
@@ -119,7 +119,7 @@ interface VedaDao {
     )
     suspend fun getMantraAt(
         vedaId: Int,
-        level1: Int,
+        level1: Int?,
         level2: Int?,
         level3: Int?,
         mantraNo: Int
