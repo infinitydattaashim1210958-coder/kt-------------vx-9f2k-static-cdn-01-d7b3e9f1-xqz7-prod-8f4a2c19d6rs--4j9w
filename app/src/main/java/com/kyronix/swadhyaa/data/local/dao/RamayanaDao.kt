@@ -13,6 +13,9 @@ interface RamayanaDao {
     @Query("SELECT * FROM kandas ORDER BY id")
     fun observeKandas(): Flow<List<KandaEntity>>
 
+    @Query("SELECT * FROM kandas ORDER BY id")
+    suspend fun getKandasOnce(): List<KandaEntity>
+
     @Query("SELECT * FROM kandas WHERE id = :id LIMIT 1")
     suspend fun getKanda(id: Int): KandaEntity?
 
