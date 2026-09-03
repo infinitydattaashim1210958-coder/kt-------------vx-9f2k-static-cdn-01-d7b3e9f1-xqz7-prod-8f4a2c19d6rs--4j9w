@@ -13,6 +13,7 @@ data class MantraContent(
     val level3: Int?,
     val mantraNo: Int?,
     val sanskrit: String,
+    val sanskritSwara: String?,
     val rishi: String?,
     val devata: String?,
     val chhanda: String?,
