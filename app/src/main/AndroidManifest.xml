@@ -2,7 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:name=".SwadhyayApp"
@@ -12,7 +11,7 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Swadhyay">
         <activity
-            android:name=".MainActivity"
+            android:name=".presentation.shell.ShellActivity"
             android:exported="true"
             android:theme="@style/Theme.Swadhyay">
             <intent-filter>
@@ -21,15 +20,11 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".MainActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Swadhyay" />
+        <activity
             android:name=".presentation.reader.ReaderActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Swadhyay" />
-        <activity
-            android:name=".presentation.ramayana.RamayanaActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Swadhyay" />
-        <activity
-            android:name=".presentation.mahabharata.MahabharataActivity"
             android:exported="false"
             android:theme="@style/Theme.Swadhyay" />
     </application>
