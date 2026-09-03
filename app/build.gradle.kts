@@ -63,12 +63,12 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-    // Networking — downloading bhashya/ramayana/mahabharata packs from the DB repo (gz-compressed sqlite)
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
     // ViewModel + Lifecycle
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
+
+    // Preferences (continue reading + bookmarks)
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Unit test – pure JVM SQLite verification (no emulator needed)
     testImplementation("junit:junit:4.13.2")
