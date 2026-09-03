@@ -22,7 +22,9 @@ import com.kyronix.swadhyaa.data.repository.VedaRepository
 import com.kyronix.swadhyaa.domain.model.VedaSummary
 import com.kyronix.swadhyaa.presentation.home.HomeUiState
 import com.kyronix.swadhyaa.presentation.home.HomeViewModel
+import com.kyronix.swadhyaa.presentation.mahabharata.MahabharataActivity
 import com.kyronix.swadhyaa.presentation.reader.ReaderActivity
+import com.kyronix.swadhyaa.presentation.ramayana.RamayanaActivity
 import kotlinx.coroutines.launch
 
 /**
@@ -166,7 +168,9 @@ class MainActivity : AppCompatActivity() {
     private fun onSectionTap(section: HomeSection) {
         when (section.action) {
             HomeAction.Vedas -> openVedaPicker()
-            HomeAction.Ramayana, HomeAction.Mahabharata, HomeAction.Library ->
+            HomeAction.Ramayana -> startActivity(Intent(this, RamayanaActivity::class.java))
+            HomeAction.Mahabharata -> startActivity(Intent(this, MahabharataActivity::class.java))
+            HomeAction.Library ->
                 Toast.makeText(this, "${section.label} স্ক্রিন শীঘ্রই যুক্ত হবে", Toast.LENGTH_SHORT).show()
             HomeAction.Soon ->
                 Toast.makeText(this, "${section.label} শীঘ্রই আসছে", Toast.LENGTH_SHORT).show()
