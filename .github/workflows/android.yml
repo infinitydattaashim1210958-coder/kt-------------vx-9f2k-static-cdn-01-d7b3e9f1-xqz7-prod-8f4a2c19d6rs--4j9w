@@ -27,19 +27,18 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Decompress database assets
+      - name: Download and decompress database assets for CI tests
         run: |
-          echo "=== Decompressing .db.gz assets ==="
-          cd app/src/main/assets/databases
-          gunzip -k -f core.db.gz
-          gunzip -k -f ramayana_core.db.gz
-          # Remove the .gz files so only .db remains (avoids duplicate resource error)
-          rm -f core.db.gz ramayana_core.db.gz
-          ls -lh
-          test -f core.db
-          test -f ramayana_core.db
-          echo "Decompression successful"
-
+         echo "=== Downloading DB assets from GitHub Release ==="
+         mkdir -p app/src/main/assets/databases
+         BASE_URL="https://github.com/infinitydattaashim1210958-coder/-------------vx-9f2k-static-cdn-01-d7b3e9f1-xqz7-prod-8f4a2c19d6rs--4j9w/releases/download/v1"
+         curl -fsSL "$BASE_URL/core.db.gz"           | gunzip > app/src/main/assets/databases/core.db
+         curl -fsSL "$BASE_URL/ramayana_core.db.gz"  | gunzip > app/src/main/assets/databases/ramayana_core.db
+         ls -lh app/src/main/assets/databases/
+         test -s app/src/main/assets/databases/core.db
+         test -s app/src/main/assets/databases/ramayana_core.db
+         echo "Download and decompression successful"
+        
       - name: Database asset presence check
         run: |
           echo "=== Asset check ==="
