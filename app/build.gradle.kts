@@ -63,6 +63,9 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
+    // Networking — downloading bhashya/ramayana/mahabharata packs from the DB repo (gz-compressed sqlite)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
     // ViewModel + Lifecycle
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.3")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
