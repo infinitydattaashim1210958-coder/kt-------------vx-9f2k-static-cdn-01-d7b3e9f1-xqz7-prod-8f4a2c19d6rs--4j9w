@@ -76,11 +76,6 @@ class RamayanaViewModel(private val repository: RamayanaRepository) : ViewModel(
         }
     }
 
-    private suspend fun findSargaId(kandaId: Int, chapter: Int): Int? {
-        // sargaOptions holds chapter numbers in the same order sargas were fetched;
-        // re-fetch to resolve chapter -> id (small list, cheap)
-    }
-
     private suspend fun applyShloka(kandas: List<KandaEntity>, s: ShlokaContent) {
         val sargaOptions = repository.getSargaOptions(s.kandaId)
         val shlokaNoOptions = repository.getShlokaNoOptions(s.sargaId)
