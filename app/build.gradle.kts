@@ -74,4 +74,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.xerial:sqlite-jdbc:3.45.3.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
+    
+    // HTTP (pack downloads)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
