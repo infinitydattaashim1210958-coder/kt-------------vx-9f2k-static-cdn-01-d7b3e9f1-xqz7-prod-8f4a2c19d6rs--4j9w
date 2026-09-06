@@ -27,18 +27,34 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Download and decompress database assets for CI tests
+      # ── Fetch bundled DBs from the DB repo Release (mirrors legacy
+      # build.yml — this step was previously missing entirely, which made
+      # the decompress step below fail on every run since the .gz files
+      # were never present in source control).
+      - name: Download core databases from DB repo Release v1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-         echo "=== Downloading DB assets from GitHub Release ==="
-         mkdir -p app/src/main/assets/databases
-         BASE_URL="https://github.com/infinitydattaashim1210958-coder/-------------vx-9f2k-static-cdn-01-d7b3e9f1-xqz7-prod-8f4a2c19d6rs--4j9w/releases/download/v1"
-         curl -fsSL "$BASE_URL/core.db.gz"           | gunzip > app/src/main/assets/databases/core.db
-         curl -fsSL "$BASE_URL/ramayana_core.db.gz"  | gunzip > app/src/main/assets/databases/ramayana_core.db
-         ls -lh app/src/main/assets/databases/
-         test -s app/src/main/assets/databases/core.db
-         test -s app/src/main/assets/databases/ramayana_core.db
-         echo "Download and decompression successful"
-        
+          mkdir -p app/src/main/assets/databases
+          gh release download v1 \
+            --repo "infinitydattaashim1210958-coder/-------------vx-9f2k-static-cdn-01-d7b3e9f1-xqz7-prod-8f4a2c19d6rs--4j9w" \
+            --pattern "core.db.gz" --pattern "ramayana_core.db.gz" \
+            --clobber --dir app/src/main/assets/databases
+          ls -lh app/src/main/assets/databases/
+
+      - name: Decompress database assets
+        run: |
+          echo "=== Decompressing .db.gz assets ==="
+          cd app/src/main/assets/databases
+          gunzip -k -f core.db.gz
+          gunzip -k -f ramayana_core.db.gz
+          # Remove the .gz files so only .db remains (avoids duplicate resource error)
+          rm -f core.db.gz ramayana_core.db.gz
+          ls -lh
+          test -f core.db
+          test -f ramayana_core.db
+          echo "Decompression successful"
+
       - name: Database asset presence check
         run: |
           echo "=== Asset check ==="
@@ -47,17 +63,23 @@ jobs:
           test -f app/src/main/assets/databases/ramayana_core.db
           echo "Assets present"
 
+      # ── Flavor-qualified task names: "dev" is the side-load flavor
+      # (com.kyronix.swadhyaa.dev) actively used for testing against the
+      # still-installed legacy app. CI builds/tests this flavor by default.
+      # Swap to prodDebug/prodRelease explicitly when cutting a real release
+      # candidate — never let assembleDebug (unqualified) run ambiguously
+      # across both flavors in a release pipeline.
       - name: Run unit tests (includes real DB count verification)
-        run: ./gradlew :app:testDebugUnitTest --stacktrace
+        run: ./gradlew :app:testDevDebugUnitTest --stacktrace
 
-      - name: Assemble debug APK
-        run: ./gradlew :app:assembleDebug --stacktrace
+      - name: Assemble dev debug APK
+        run: ./gradlew :app:assembleDevDebug --stacktrace
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: swadhyay-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: swadhyay-dev-debug-apk
+          path: app/build/outputs/apk/dev/debug/*.apk
           retention-days: 3
 
       - name: Print verification summary
