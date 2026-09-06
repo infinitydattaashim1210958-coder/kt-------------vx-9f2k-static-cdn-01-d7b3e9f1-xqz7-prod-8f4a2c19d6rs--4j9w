@@ -108,4 +108,16 @@ object PackDownloadManager {
     fun clearAll(context: Context) {
         packsDir(context).listFiles()?.forEach { it.delete() }
     }
+
+    /**
+     * Deletes one already-downloaded, decompressed pack file. Needed by
+     * LibraryDbBookRepository, whose flow is download → merge into
+     * MasterDatabase → delete the temp file (matching legacy's
+     * `fs.deleteFile` cleanup after `mergeLibraryBookPack`) — unlike
+     * Veda/Ramayana/Mahabharata, which keep the downloaded pack
+     * permanently and re-query it directly on every access.
+     */
+    fun deleteLocalPack(context: Context, fileName: String) {
+        localDbFile(context, fileName).delete()
+    }
 }
