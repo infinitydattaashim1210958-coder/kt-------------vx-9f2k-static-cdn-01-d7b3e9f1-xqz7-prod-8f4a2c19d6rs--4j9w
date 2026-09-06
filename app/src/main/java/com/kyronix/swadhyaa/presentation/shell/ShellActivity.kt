@@ -16,6 +16,7 @@ import com.kyronix.swadhyaa.data.local.RamayanaCoreDatabase
 import com.kyronix.swadhyaa.data.prefs.UserPrefs
 import com.kyronix.swadhyaa.data.repository.SearchRepository
 import com.kyronix.swadhyaa.data.repository.VedaRepository
+import com.kyronix.swadhyaa.presentation.agent.AgentActivity
 import com.kyronix.swadhyaa.presentation.reader.ReaderActivity
 import com.kyronix.swadhyaa.ui.theme.AppColors
 import kotlinx.coroutines.Job
@@ -68,7 +69,26 @@ class ShellActivity : AppCompatActivity() {
             setBackgroundColor(AppColors.surface)
             setPadding(dp(4), dp(8), dp(4), dp(8))
         }
+
+        // শাস্ত্র-সহায়ক FAB button (tab bar-এর উপরে)
+        val agentBtn = TextView(this).apply {
+            text = "✦ শাস্ত্র-সহায়ক"
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTextColor(AppColors.saffron)
+            setBackgroundColor(AppColors.surface)
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            setOnClickListener {
+                startActivity(Intent(this@ShellActivity, AgentActivity::class.java))
+            }
+        }
+
         root.addView(scroll)
+        root.addView(agentBtn)   // tab bar-এর ঠিক উপরে
         root.addView(tabBar)
         setContentView(root)
 
@@ -217,8 +237,6 @@ class ShellActivity : AppCompatActivity() {
                         text = "৬ কাণ্ড · core offline"
                         setTextColor(AppColors.muted)
                     })
-                    // If RamayanaActivity exists on device build, user can wire intent;
-                    // placeholder keeps shell complete.
                 })
             } catch (e: Exception) {
                 content.addView(TextView(this@ShellActivity).apply {
