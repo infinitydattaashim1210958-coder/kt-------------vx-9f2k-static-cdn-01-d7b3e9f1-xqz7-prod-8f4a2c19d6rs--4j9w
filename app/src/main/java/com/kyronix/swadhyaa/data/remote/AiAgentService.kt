@@ -25,8 +25,8 @@ import java.util.concurrent.TimeUnit
  */
 object AiAgentService {
 
-    // ── ⚠️  Replace this with your actual Gemini API key ──────────────
-    private const val GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE"
+    // ── ⚠️  API key ──────────────
+    private const val GEMINI_API_KEY = BuildConfig.GEMINI_API_KEY
     // ──────────────────────────────────────────────────────────────────
 
     private const val MODEL = "gemini-2.0-flash"
