@@ -5,21 +5,18 @@ import android.graphics.Typeface
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
-import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.kyronix.swadhyaa.data.local.CoreDatabase
-import com.kyronix.swadhyaa.data.local.DatabaseAssetManager
 import com.kyronix.swadhyaa.data.local.RamayanaCoreDatabase
+import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.data.prefs.UserPrefs
 import com.kyronix.swadhyaa.data.repository.SearchRepository
 import com.kyronix.swadhyaa.data.repository.VedaRepository
-import com.kyronix.swadhyaa.presentation.agent.AgentActivity
 import com.kyronix.swadhyaa.presentation.reader.ReaderActivity
 import com.kyronix.swadhyaa.ui.theme.AppColors
 import kotlinx.coroutines.Job
@@ -28,29 +25,18 @@ import kotlinx.coroutines.launch
 
 /**
  * App shell: Home · Library · Bookmarks · Search · Settings
- *
- * FIX: CoreDatabase / RamayanaCoreDatabase must NOT be opened until
- * DatabaseAssetManager.ensureReady() has returned true. On a fresh install
- * the DBs are downloaded in SwadhyayApp's background scope; ShellActivity
- * used to call getInstance() immediately in onCreate(), which triggered the
- * require() guard inside build() → IllegalArgumentException → crash.
- *
- * Solution: show a loading screen, collect DatabaseAssetManager.progress
- * until state == COMPLETED (or FAILED), then initialise the repos and
- * render the real UI.
+ * Implements M8 A–D foundation on one activity (phone-friendly).
  */
 class ShellActivity : AppCompatActivity() {
 
     private enum class Tab { HOME, LIBRARY, BOOKMARKS, SEARCH, SETTINGS }
 
-    // These are null until the DB is confirmed ready
-    private var vedaRepo: VedaRepository? = null
-    private var searchRepo: SearchRepository? = null
-
-    private lateinit var prefs: UserPrefs
-    private lateinit var root: LinearLayout
     private lateinit var content: LinearLayout
     private lateinit var tabBar: LinearLayout
+    private lateinit var prefs: UserPrefs
+    private lateinit var settingsRepo: SettingsRepository
+    private lateinit var vedaRepo: VedaRepository
+    private lateinit var searchRepo: SearchRepository
 
     private var current = Tab.HOME
     private var searchJob: Job? = null
@@ -60,139 +46,16 @@ class ShellActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = UserPrefs(this)
+        settingsRepo = SettingsRepository(this)
+        val core = CoreDatabase.getInstance(this)
+        val ram = RamayanaCoreDatabase.getInstance(this)
+        vedaRepo = VedaRepository(core)
+        searchRepo = SearchRepository(core, ram)
 
-        root = LinearLayout(this).apply {
+        val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(AppColors.bg)
         }
-        setContentView(root)
-
-        // Show loading screen first, wait for DB, then build real UI
-        showLoadingScreen()
-        waitForDatabaseThenInit()
-    }
-
-    // ── Loading screen ────────────────────────────────────────────────
-
-    private fun showLoadingScreen() {
-        root.removeAllViews()
-
-        val wrapper = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.MATCH_PARENT
-            )
-        }
-
-        val title = TextView(this).apply {
-            text = "স্বাধ্যায়"
-            textSize = 28f
-            setTextColor(AppColors.gold)
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-        }
-        val subtitle = TextView(this).apply {
-            text = "সনাতন ধর্মশাস্ত্র"
-            textSize = 14f
-            setTextColor(AppColors.muted)
-            gravity = Gravity.CENTER
-            setPadding(0, dp(4), 0, dp(32))
-        }
-        val spinner = ProgressBar(this).apply {
-            isIndeterminate = true
-            indeterminateDrawable?.setTint(AppColors.saffron)
-            layoutParams = LinearLayout.LayoutParams(dp(48), dp(48)).apply {
-                gravity = Gravity.CENTER_HORIZONTAL
-            }
-        }
-        val statusText = TextView(this).apply {
-            tag = "status"
-            text = "ডেটাবেস প্রস্তুত হচ্ছে…"
-            textSize = 13f
-            setTextColor(AppColors.muted)
-            gravity = Gravity.CENTER
-            setPadding(dp(32), dp(16), dp(32), 0)
-        }
-
-        wrapper.addView(title)
-        wrapper.addView(subtitle)
-        wrapper.addView(spinner)
-        wrapper.addView(statusText)
-        root.addView(wrapper)
-    }
-
-    private fun updateLoadingStatus(msg: String) {
-        val tv = root.findViewWithTag<TextView>("status") ?: return
-        tv.text = msg
-    }
-
-    // ── Wait for DB, then initialise ──────────────────────────────────
-
-    private fun waitForDatabaseThenInit() {
-        lifecycleScope.launch {
-            // Collect progress until terminal state
-            DatabaseAssetManager.progress.collect { progress ->
-                when (progress.state) {
-                    DatabaseAssetManager.State.IDLE,
-                    DatabaseAssetManager.State.CHECKING -> {
-                        updateLoadingStatus("ডেটাবেস পরীক্ষা করা হচ্ছে…")
-                    }
-                    DatabaseAssetManager.State.DOWNLOADING -> {
-                        val pct = if (progress.totalBytes > 0)
-                            " (${(progress.downloadedBytes * 100 / progress.totalBytes)}%)"
-                        else ""
-                        updateLoadingStatus("ডাউনলোড হচ্ছে${pct}…\n${progress.currentAsset ?: ""}")
-                    }
-                    DatabaseAssetManager.State.VERIFYING  -> updateLoadingStatus("যাচাই করা হচ্ছে…")
-                    DatabaseAssetManager.State.EXTRACTING -> updateLoadingStatus("প্রক্রিয়া করা হচ্ছে…")
-                    DatabaseAssetManager.State.INSTALLING -> updateLoadingStatus("ইনস্টল হচ্ছে…")
-
-                    DatabaseAssetManager.State.COMPLETED -> {
-                        // DB files are on disk — safe to open Room now
-                        initReposAndBuildUi()
-                        return@collect   // stop collecting
-                    }
-
-                    DatabaseAssetManager.State.FAILED -> {
-                        showError(progress.error ?: "অজানা ত্রুটি")
-                        return@collect
-                    }
-                }
-            }
-        }
-    }
-
-    private fun initReposAndBuildUi() {
-        try {
-            val core = CoreDatabase.getInstance(this)
-            val ram  = RamayanaCoreDatabase.getInstance(this)
-            vedaRepo   = VedaRepository(core)
-            searchRepo = SearchRepository(core, ram)
-            buildFullUi()
-        } catch (e: Exception) {
-            showError("DB খুলতে ব্যর্থ: ${e.message}")
-        }
-    }
-
-    private fun showError(msg: String) {
-        root.removeAllViews()
-        val tv = TextView(this).apply {
-            text = "⚠ ডেটাবেস লোড ব্যর্থ\n\n$msg\n\nঅ্যাপ পুনরায় চালু করুন।"
-            setTextColor(AppColors.vermilion)
-            textSize = 14f
-            setPadding(dp(24), dp(48), dp(24), 0)
-            gravity = Gravity.CENTER
-        }
-        root.addView(tv)
-    }
-
-    // ── Full UI (only called after DB is ready) ───────────────────────
-
-    private fun buildFullUi() {
-        root.removeAllViews()   // clear loading screen
-
         val scroll = ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
@@ -203,33 +66,14 @@ class ShellActivity : AppCompatActivity() {
             setPadding(dp(16), dp(16), dp(16), dp(16))
         }
         scroll.addView(content)
-
-        // শাস্ত্র-সহায়ক button (above tab bar)
-        val agentBtn = TextView(this).apply {
-            text = "✦ শাস্ত্র-সহায়ক"
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setTextColor(AppColors.saffron)
-            setBackgroundColor(AppColors.surface)
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            setOnClickListener {
-                startActivity(Intent(this@ShellActivity, AgentActivity::class.java))
-            }
-        }
-
         tabBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(AppColors.surface)
             setPadding(dp(4), dp(8), dp(4), dp(8))
         }
-
         root.addView(scroll)
-        root.addView(agentBtn)
         root.addView(tabBar)
+        setContentView(root)
 
         buildTabs()
         show(Tab.HOME)
@@ -237,22 +81,17 @@ class ShellActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Only refresh if UI is already built (DB was ready)
-        if (vedaRepo != null && (current == Tab.HOME || current == Tab.BOOKMARKS)) {
-            show(current)
-        }
+        if (current == Tab.HOME || current == Tab.BOOKMARKS) show(current)
     }
-
-    // ── Tab helpers ───────────────────────────────────────────────────
 
     private fun buildTabs() {
         tabBar.removeAllViews()
         listOf(
-            Tab.HOME      to "হোম",
-            Tab.LIBRARY   to "লাইব্রেরি",
+            Tab.HOME to "হোম",
+            Tab.LIBRARY to "লাইব্রেরি",
             Tab.BOOKMARKS to "বুকমার্ক",
-            Tab.SEARCH    to "খুঁজুন",
-            Tab.SETTINGS  to "সেটিংস"
+            Tab.SEARCH to "খুঁজুন",
+            Tab.SETTINGS to "সেটিংস"
         ).forEach { (tab, label) ->
             val t = TextView(this).apply {
                 text = label
@@ -261,9 +100,7 @@ class ShellActivity : AppCompatActivity() {
                 setPadding(dp(4), dp(10), dp(4), dp(10))
                 setTextColor(if (tab == current) AppColors.saffron else AppColors.muted)
                 setOnClickListener { show(tab) }
-                layoutParams = LinearLayout.LayoutParams(
-                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
-                )
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
             tabBar.addView(t)
         }
@@ -274,15 +111,13 @@ class ShellActivity : AppCompatActivity() {
         buildTabs()
         content.removeAllViews()
         when (tab) {
-            Tab.HOME      -> renderHome()
-            Tab.LIBRARY   -> renderLibrary()
+            Tab.HOME -> renderHome()
+            Tab.LIBRARY -> renderLibrary()
             Tab.BOOKMARKS -> renderBookmarks()
-            Tab.SEARCH    -> renderSearch()
-            Tab.SETTINGS  -> renderSettings()
+            Tab.SEARCH -> renderSearch()
+            Tab.SETTINGS -> renderSettings()
         }
     }
-
-    // ── View helpers ──────────────────────────────────────────────────
 
     private fun title(text: String) = TextView(this).apply {
         this.text = text
@@ -304,21 +139,21 @@ class ShellActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(AppColors.surface)
             setPadding(dp(14), dp(14), dp(14), dp(14))
-            layoutParams = LinearLayout.LayoutParams(
+            val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(10) }
+            layoutParams = lp
             block()
         }
     }
-
-    // ── Tab renderers ─────────────────────────────────────────────────
 
     private fun renderHome() {
         content.addView(title("স্বাধ্যায়"))
         content.addView(subtitle("সনাতন ধর্মশাস্ত্র"))
 
         lifecycleScope.launch {
+            // Continue reading
             val cont = prefs.continueFlow.first()
             if (cont != null) {
                 content.addView(card {
@@ -345,9 +180,8 @@ class ShellActivity : AppCompatActivity() {
             }
 
             try {
-                val repo = vedaRepo ?: return@launch
-                val vedas = repo.getVedaSummaries()
-                val total = repo.getTotalMantraCount()
+                val vedas = vedaRepo.getVedaSummaries()
+                val total = vedaRepo.getTotalMantraCount()
                 content.addView(TextView(this@ShellActivity).apply {
                     text = "Database OK — $total mantras"
                     setTextColor(AppColors.gold)
@@ -374,6 +208,7 @@ class ShellActivity : AppCompatActivity() {
                         }
                     })
                 }
+                // Ramayana entry
                 content.addView(card {
                     addView(TextView(this@ShellActivity).apply {
                         text = "রামায়ণ"
@@ -385,6 +220,8 @@ class ShellActivity : AppCompatActivity() {
                         text = "৬ কাণ্ড · core offline"
                         setTextColor(AppColors.muted)
                     })
+                    // If RamayanaActivity exists on device build, user can wire intent;
+                    // placeholder keeps shell complete.
                 })
             } catch (e: Exception) {
                 content.addView(TextView(this@ShellActivity).apply {
@@ -398,9 +235,32 @@ class ShellActivity : AppCompatActivity() {
     private fun renderLibrary() {
         content.addView(title("লাইব্রেরি"))
         content.addView(subtitle("Vedas · Itihāsa"))
+
+        // Digital Library (downloadable HTML/db.gz commentary books, e.g.
+        // গোপালন/গুরুগিরি) is a distinct feature from the Veda/Ramayana
+        // shortcuts below — kept as its own screen (LibraryActivity) rather
+        // than folded into this one, since the two have unrelated data
+        // models (LibraryRepository vs. VedaRepository) and this tab's
+        // existing shortcuts already work and shouldn't be disturbed.
+        content.addView(card {
+            addView(TextView(this@ShellActivity).apply {
+                text = "ডিজিটাল লাইব্রেরি"
+                setTextColor(AppColors.saffron)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            addView(TextView(this@ShellActivity).apply {
+                text = "ডাউনলোডযোগ্য বই ও গ্রন্থ"
+                setTextColor(AppColors.muted)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            })
+            setOnClickListener {
+                startActivity(Intent(this@ShellActivity, com.kyronix.swadhyaa.presentation.library.LibraryActivity::class.java))
+            }
+        })
+
         lifecycleScope.launch {
-            val repo = vedaRepo ?: return@launch
-            repo.getVedaSummaries().forEach { v ->
+            vedaRepo.getVedaSummaries().forEach { v ->
                 content.addView(card {
                     addView(TextView(this@ShellActivity).apply {
                         text = v.name
@@ -491,7 +351,6 @@ class ShellActivity : AppCompatActivity() {
         content.addView(results)
 
         fun runSearch(q: String) {
-            val repo = searchRepo ?: return
             searchJob?.cancel()
             searchJob = lifecycleScope.launch {
                 results.removeAllViews()
@@ -501,7 +360,7 @@ class ShellActivity : AppCompatActivity() {
                     setTextColor(AppColors.muted)
                 })
                 try {
-                    val hits = repo.search(q.trim())
+                    val hits = searchRepo.search(q.trim())
                     results.removeAllViews()
                     if (hits.isEmpty()) {
                         results.addView(TextView(this@ShellActivity).apply {
@@ -549,26 +408,189 @@ class ShellActivity : AppCompatActivity() {
 
     private fun renderSettings() {
         content.addView(title("সেটিংস"))
-        content.addView(card {
-            addView(TextView(this@ShellActivity).apply {
-                text = "Offline-first"
-                setTextColor(AppColors.ivory)
+
+        lifecycleScope.launch {
+            val settings = settingsRepo.settingsFlow.first()
+
+            // ── Accent — real visual effect, verified against app.css's
+            // four [data-accent] blocks (AppColors.applyAccent) ─────────
+            content.addView(card {
+                addView(TextView(this@ShellActivity).apply {
+                    text = "রঙের থিম (Accent)"
+                    setTextColor(AppColors.ivory)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    typeface = Typeface.DEFAULT_BOLD
+                    setPadding(0, 0, 0, dp(10))
+                })
+                val accentRow = LinearLayout(this@ShellActivity).apply { orientation = LinearLayout.HORIZONTAL }
+                val accents = listOf("gold" to "সোনালি", "emerald" to "পান্না", "indigo" to "নীল", "violet" to "বেগুনি")
+                accents.forEach { (key, label) ->
+                    accentRow.addView(TextView(this@ShellActivity).apply {
+                        text = if (key == settings.accentTheme) "● $label" else "○ $label"
+                        setTextColor(if (key == settings.accentTheme) AppColors.goldBright else AppColors.muted)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                        setPadding(dp(4), dp(6), dp(12), dp(6))
+                        setOnClickListener {
+                            lifecycleScope.launch {
+                                settingsRepo.setAccentTheme(key)
+                                AppColors.applyAccent(key)
+                                recreate() // re-render every screen with the new accent, matching legacy's immediate re-theme
+                            }
+                        }
+                    })
+                }
+                addView(accentRow)
             })
-            addView(TextView(this@ShellActivity).apply {
-                text = "Core DB APK-এ bundled। Scholar packs আলাদা DB repo Release থেকে।"
-                setTextColor(AppColors.muted)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+
+            // ── Theme (auto/light/dark) — stored for settings/migration
+            // parity, but see AppColors.kt's doc comment: legacy itself
+            // has no [data-theme="light"] CSS or prefers-color-scheme
+            // media query anywhere, so selecting "light" today changes
+            // nothing visually in the real app either. Being upfront
+            // about this rather than silently implying it does something. ──
+            content.addView(card {
+                addView(TextView(this@ShellActivity).apply {
+                    text = "থিম মোড"
+                    setTextColor(AppColors.ivory)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    typeface = Typeface.DEFAULT_BOLD
+                })
+                addView(TextView(this@ShellActivity).apply {
+                    text = "বর্তমানে অ্যাপটি সবসময় গাঢ় (dark) থিমে দেখায় — মূল সংস্করণেও 'light' মোডের কোনো ভিজ্যুয়াল প্রভাব নেই।"
+                    setTextColor(AppColors.mutedDim)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                    setPadding(0, dp(2), 0, dp(10))
+                })
+                val themeRow = LinearLayout(this@ShellActivity).apply { orientation = LinearLayout.HORIZONTAL }
+                listOf("auto" to "স্বয়ংক্রিয়", "light" to "হালকা", "dark" to "গাঢ়").forEach { (key, label) ->
+                    themeRow.addView(TextView(this@ShellActivity).apply {
+                        text = if (key == settings.theme) "● $label" else "○ $label"
+                        setTextColor(if (key == settings.theme) AppColors.goldBright else AppColors.muted)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                        setPadding(dp(4), dp(6), dp(12), dp(6))
+                        setOnClickListener {
+                            lifecycleScope.launch { settingsRepo.setTheme(key) }
+                            // No recreate() needed — see note above, this
+                            // setting currently has no visual effect to refresh.
+                        }
+                    })
+                }
+                addView(themeRow)
             })
+
+            // ── Font size ──────────────────────────────────────────────
+            content.addView(card {
+                addView(TextView(this@ShellActivity).apply {
+                    text = "লেখার আকার"
+                    setTextColor(AppColors.ivory)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    typeface = Typeface.DEFAULT_BOLD
+                    setPadding(0, 0, 0, dp(8))
+                })
+                val row = LinearLayout(this@ShellActivity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+                val valueLabel = TextView(this@ShellActivity).apply {
+                    text = "${settings.fontSize}"
+                    setTextColor(AppColors.ivory)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    setPadding(dp(20), 0, dp(20), 0)
+                }
+                row.addView(TextView(this@ShellActivity).apply {
+                    text = "−"
+                    setTextColor(AppColors.gold)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+                    setPadding(dp(12), dp(4), dp(12), dp(4))
+                    setOnClickListener {
+                        lifecycleScope.launch {
+                            val cur = settingsRepo.settingsFlow.first().fontSize
+                            val next = (cur - 1).coerceIn(12, 32)
+                            settingsRepo.setFontSize(next)
+                            valueLabel.text = "$next"
+                        }
+                    }
+                })
+                row.addView(valueLabel)
+                row.addView(TextView(this@ShellActivity).apply {
+                    text = "+"
+                    setTextColor(AppColors.gold)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
+                    setPadding(dp(12), dp(4), dp(12), dp(4))
+                    setOnClickListener {
+                        lifecycleScope.launch {
+                            val cur = settingsRepo.settingsFlow.first().fontSize
+                            val next = (cur + 1).coerceIn(12, 32)
+                            settingsRepo.setFontSize(next)
+                            valueLabel.text = "$next"
+                        }
+                    }
+                })
+                addView(row)
+            })
+
+            // ── Toggles ────────────────────────────────────────────────
+            content.addView(card {
+                addView(toggleRow("লেখা জাস্টিফাই করুন", settings.justifyText) { checked ->
+                    lifecycleScope.launch { settingsRepo.setJustifyText(checked) }
+                })
+                addView(toggleRow("পড়ার সময় স্ক্রিন জ্বলে থাকুক", settings.keepAwake) { checked ->
+                    lifecycleScope.launch { settingsRepo.setKeepAwake(checked) }
+                })
+            })
+
+            content.addView(card {
+                addView(TextView(this@ShellActivity).apply {
+                    text = "Offline-first"
+                    setTextColor(AppColors.ivory)
+                })
+                addView(TextView(this@ShellActivity).apply {
+                    text = "Core DB APK-এ bundled। Scholar packs আলাদা DB repo Release থেকে।"
+                    setTextColor(AppColors.muted)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                })
+            })
+            content.addView(card {
+                addView(TextView(this@ShellActivity).apply {
+                    text = "Design"
+                    setTextColor(AppColors.ivory)
+                })
+                addView(TextView(this@ShellActivity).apply {
+                    text = "Illuminated manuscript · saffron accent · content-first"
+                    setTextColor(AppColors.muted)
+                })
+            })
+        }
+    }
+
+    /** Simple two-state row (label + ⚪/⚫ indicator) — no Switch widget dependency, matches this screen's plain-text-row style. */
+    private fun toggleRow(label: String, initial: Boolean, onChange: (Boolean) -> Unit): LinearLayout {
+        var state = initial
+        lateinit var indicator: TextView
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(6), 0, dp(6))
+            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+        }
+        row.addView(TextView(this).apply {
+            text = label
+            setTextColor(AppColors.ivory)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         })
-        content.addView(card {
-            addView(TextView(this@ShellActivity).apply {
-                text = "Design"
-                setTextColor(AppColors.ivory)
-            })
-            addView(TextView(this@ShellActivity).apply {
-                text = "Illuminated manuscript · saffron accent · content-first"
-                setTextColor(AppColors.muted)
-            })
-        })
+        indicator = TextView(this).apply {
+            text = if (state) "চালু ●" else "○ বন্ধ"
+            setTextColor(if (state) AppColors.goldBright else AppColors.muted)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        }
+        row.addView(indicator)
+        row.setOnClickListener {
+            state = !state
+            indicator.text = if (state) "চালু ●" else "○ বন্ধ"
+            indicator.setTextColor(if (state) AppColors.goldBright else AppColors.muted)
+            onChange(state)
+        }
+        return row
     }
 }
