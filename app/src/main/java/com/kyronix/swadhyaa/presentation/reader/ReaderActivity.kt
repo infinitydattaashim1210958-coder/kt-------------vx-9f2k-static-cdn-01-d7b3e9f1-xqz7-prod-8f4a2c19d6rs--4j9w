@@ -20,6 +20,7 @@ import com.kyronix.swadhyaa.data.local.CoreDatabase
 import com.kyronix.swadhyaa.data.repository.VedaRepository
 import com.kyronix.swadhyaa.data.prefs.UserPrefs
 import com.kyronix.swadhyaa.ui.theme.AppColors
+import com.kyronix.swadhyaa.ui.gesture.attachSwipeNavigation
 import kotlinx.coroutines.launch
 
 /**
@@ -30,12 +31,21 @@ class ReaderActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_VEDA_ID = "veda_id"
-        private val BG = Color.parseColor("#0F0D0A")
-        private val SURFACE = Color.parseColor("#17130F")
-        private val IVORY = Color.parseColor("#F5E6C8")
-        private val GOLD = Color.parseColor("#C4A574")
-        private val SAFFRON = Color.parseColor("#E8A317")
-        private val MUTED = Color.parseColor("#A89070")
+        // Delegate to the live, accent-aware AppColors object rather than
+        // an independent hardcoded copy — an earlier version of this file
+        // imported AppColors but never actually used it, duplicating the
+        // old (now-corrected) palette locally instead. Computed properties
+        // (get() =, not a cached val =) matter here: AppColors.gold/
+        // .saffron change when the user picks a different accent in
+        // Settings, and this Activity is refreshed via recreate() rather
+        // than a fresh process — a cached val would keep showing the
+        // accent from whenever this companion object first initialized.
+        private val BG get() = AppColors.bg
+        private val SURFACE get() = AppColors.surface
+        private val IVORY get() = AppColors.ivory
+        private val GOLD get() = AppColors.gold
+        private val SAFFRON get() = AppColors.saffron
+        private val MUTED get() = AppColors.muted
     }
 
     private val vedaId by lazy { intent.getIntExtra(EXTRA_VEDA_ID, 1) }
@@ -62,7 +72,9 @@ class ReaderActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = UserPrefs(this)
-        setContentView(buildUi())
+        val root = buildUi()
+        root.attachSwipeNavigation(onSwipeLeft = { vm.next() }, onSwipeRight = { vm.prev() })
+        setContentView(root)
         observe()
     }
 
