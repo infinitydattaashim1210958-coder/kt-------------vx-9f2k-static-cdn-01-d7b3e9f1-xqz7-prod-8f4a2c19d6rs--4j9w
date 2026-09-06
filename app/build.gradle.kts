@@ -28,7 +28,7 @@ android {
         buildConfigField(
             "String",
             "GEMINI_API_KEY",
-            "\"${localProps.getProperty("gemini_api_key", "")}\""
+            "\"${localProps.getProperty("AQ.Ab8RN6LbRbsDCiRG3Xzp2LQBp2-zZKZ9SaS_ahan0yBEHnLywQ", "")}\""
         )
     }
 
