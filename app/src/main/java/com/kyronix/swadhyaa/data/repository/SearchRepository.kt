@@ -42,7 +42,8 @@ class SearchRepository(
         ).use { it.count > 0 }
 
         return if (hasFts) {
-            val fts = q.split(Regex("\\s+")).joinToString(" ") { "$it*" }
+            val fts = escapeFtsQuery(q)
+            if (fts.isEmpty()) return emptyList()
             db.query(
                 """
                 SELECT m.id, m.veda_id, m.level1, m.level2, m.mantra_no,
@@ -77,10 +78,10 @@ class SearchRepository(
                 """
                 SELECT id, veda_id, level1, level2, mantra_no, substr(sanskrit_text,1,80)
                 FROM mantras
-                WHERE sanskrit_text LIKE ?
+                WHERE sanskrit_text LIKE ? ESCAPE '\'
                 LIMIT ?
                 """.trimIndent(),
-                arrayOf("%$q%", limit.toString())
+                arrayOf("%${escapeLike(q)}%", limit.toString())
             ).use { c ->
                 val out = mutableListOf<SearchHit>()
                 while (c.moveToNext()) {
@@ -104,7 +105,8 @@ class SearchRepository(
         ).use { it.count > 0 }
 
         return if (hasFts) {
-            val fts = q.split(Regex("\\s+")).joinToString(" ") { "$it*" }
+            val fts = escapeFtsQuery(q)
+            if (fts.isEmpty()) return emptyList()
             db.query(
                 """
                 SELECT s.id, s.kanda_id, s.sarga_id, substr(s.sanskrit,1,80)
@@ -131,9 +133,9 @@ class SearchRepository(
             db.query(
                 """
                 SELECT id, kanda_id, sarga_id, substr(sanskrit,1,80)
-                FROM shlokas WHERE sanskrit LIKE ? LIMIT ?
+                FROM shlokas WHERE sanskrit LIKE ? ESCAPE '\' LIMIT ?
                 """.trimIndent(),
-                arrayOf("%$q%", limit.toString())
+                arrayOf("%${escapeLike(q)}%", limit.toString())
             ).use { c ->
                 val out = mutableListOf<SearchHit>()
                 while (c.moveToNext()) {
@@ -148,5 +150,42 @@ class SearchRepository(
                 out
             }
         }
+    }
+
+    companion object {
+        /**
+         * Builds a crash-safe FTS5 MATCH expression with per-token prefix
+         * matching. See RISK_REGISTER.md R10.
+         *
+         * FTS5 treats the matched string as its own query language —
+         * quotes, colons, parentheses, AND/OR/NOT, NEAR() are all
+         * significant regardless of parameter binding. The naive
+         * `"$token*"` this replaces threw a runtime SQLiteException from a
+         * plain search box on an unbalanced quote, a dangling "AND"/"OR",
+         * "col:value" syntax, an unclosed paren, or a leading hyphen —
+         * empirically confirmed against real SQLite FTS5 before and after
+         * this fix, including Bengali/Devanagari input.
+         *
+         * Each token is quoted as its own literal phrase (embedded quotes
+         * doubled) with the `*` prefix operator placed OUTSIDE the quotes
+         * — FTS5 permits `"term"*` as a quoted-prefix query. This keeps
+         * per-token prefix matching (a UX improvement over legacy's
+         * whole-query exact-phrase match — see FEATURE_PARITY_MATRIX.md)
+         * while making the expression syntax-error-proof for any input.
+         *
+         * Returns "" for a query with no real tokens (e.g. all whitespace)
+         * — callers must check for that before running MATCH.
+         */
+        internal fun escapeFtsQuery(query: String): String =
+            query.trim()
+                .split(Regex("\\s+"))
+                .filter { it.isNotEmpty() }
+                .joinToString(" ") { token ->
+                    "\"${token.replace("\"", "\"\"")}\"*"
+                }
+
+        /** Escapes % and _ for a LIKE fallback query using ESCAPE '\'. */
+        internal fun escapeLike(query: String): String =
+            query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     }
 }

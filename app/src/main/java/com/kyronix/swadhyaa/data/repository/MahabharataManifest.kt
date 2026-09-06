@@ -31,4 +31,26 @@ object MahabharataManifest {
         ParbaInfo(17, "মহাপ্রস্থানিকপর্ব", 3, 12, "mahabharata_parba_17.db.gz", 25518),
         ParbaInfo(18, "স্বর্গারোহনপর্ব", 6, 19, "mahabharata_parba_18.db.gz", 60040)
     )
+
+    /**
+     * Legacy's MAHABHARATA_PARBAS (mahabharata.js) has a static `id` field —
+     * 301..318 — that Kotlin's ParbaInfo deliberately doesn't carry (Kotlin
+     * navigates by parbaNo, 1..18, everywhere instead). Legacy's router
+     * hash (`#/mahabharata/parba/<id>/adhyay/<n>`, confirmed directly
+     * against app.js) uses that 301..318 id, not parbaNo — so migrating a
+     * legacy bookmark/reading-position requires converting one to the
+     * other.
+     *
+     * Verified directly against legacy source (mahabharata.js's
+     * MAHABHARATA_PARBAS literal): id = 300 + parba_no for all 18 entries,
+     * no exceptions. Implemented as a fixed lookup table copied from that
+     * same source, not a bare arithmetic assumption a future schema change
+     * could silently break.
+     */
+    private val LEGACY_ID_TO_PARBA_NO: Map<Int, Int> =
+        (301..318).associateWith { it - 300 }
+
+    fun parbaNoFromLegacyId(legacyId: Int): Int? = LEGACY_ID_TO_PARBA_NO[legacyId]
+
+    fun byParbaNo(parbaNo: Int): ParbaInfo? = PARBAS.getOrNull(parbaNo - 1)?.takeIf { it.parbaNo == parbaNo }
 }
