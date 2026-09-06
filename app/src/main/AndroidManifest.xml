@@ -10,7 +10,6 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.Swadhyay">
-
         <activity
             android:name=".presentation.shell.ShellActivity"
             android:exported="true"
@@ -20,23 +19,40 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
         <activity
             android:name=".MainActivity"
             android:exported="false"
             android:theme="@style/Theme.Swadhyay" />
-
         <activity
             android:name=".presentation.reader.ReaderActivity"
             android:exported="false"
             android:theme="@style/Theme.Swadhyay" />
-
-        <!-- AI শাস্ত্র-সহায়ক chat screen -->
         <activity
-            android:name=".presentation.agent.AgentActivity"
+            android:name=".presentation.library.LibraryActivity"
             android:exported="false"
-            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Swadhyay" />
+        <activity
+            android:name=".presentation.library.LibraryDbBookReaderActivity"
+            android:exported="false"
             android:theme="@style/Theme.Swadhyay" />
 
+        <!--
+          Needed to open a downloaded library HTML book via ACTION_VIEW in
+          the system browser (LibraryHtmlBookRepository) — a raw file://
+          Uri pointing at internal app storage is blocked
+          (FileUriExposedException) on API 24+; content:// via FileProvider
+          is required instead. Authority uses ${applicationId} so it
+          resolves correctly for both the dev and prod flavors
+          (RISK_REGISTER.md R1) rather than being hardcoded to one.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>
