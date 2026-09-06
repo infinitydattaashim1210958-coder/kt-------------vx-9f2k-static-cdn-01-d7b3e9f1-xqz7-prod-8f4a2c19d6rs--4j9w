@@ -8,6 +8,7 @@ import com.kyronix.swadhyaa.data.local.dao.RamayanaDao
 import com.kyronix.swadhyaa.data.local.entity.KandaEntity
 import com.kyronix.swadhyaa.data.local.entity.SargaEntity
 import com.kyronix.swadhyaa.data.local.entity.ShlokaEntity
+import java.io.File
 
 /**
  * Read-only Room database for ramayana_core.db asset.
@@ -28,7 +29,7 @@ abstract class RamayanaCoreDatabase : RoomDatabase() {
 
     companion object {
         private const val DB_NAME = "ramayana_core"
-        
+
         @Volatile
         private var INSTANCE: RamayanaCoreDatabase? = null
 
@@ -39,18 +40,18 @@ abstract class RamayanaCoreDatabase : RoomDatabase() {
         }
 
         private fun build(context: Context): RamayanaCoreDatabase {
-    val dbFile: File = DatabaseAssetManager.ramayanaDbFile(context)
-    require(dbFile.exists() && dbFile.length() > 500_000) {
-        "ramayana_core.db is not ready. Call DatabaseAssetManager.ensureReady() first."
-    }
+            val dbFile: File = DatabaseAssetManager.ramayanaDbFile(context)
+            require(dbFile.exists() && dbFile.length() > 500_000) {
+                "ramayana_core.db is not ready. Call DatabaseAssetManager.ensureReady() first."
+            }
 
-    return Room.databaseBuilder(
-        context.applicationContext,
-        RamayanaCoreDatabase::class.java,
-        DB_NAME
-    )
-        .createFromFile(dbFile)  // ← was createFromAsset(), which has no file to read
-        .build()
-     }
+            return Room.databaseBuilder(
+                context.applicationContext,
+                RamayanaCoreDatabase::class.java,
+                DB_NAME
+            )
+                .createFromFile(dbFile)
+                .build()
+        }
     }
 }

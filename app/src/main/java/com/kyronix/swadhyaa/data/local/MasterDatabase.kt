@@ -28,7 +28,7 @@ import com.kyronix.swadhyaa.data.local.entity.VedaBhashyaContentEntity
         MahabharataUpakhyanaEntity::class
     ],
     version = 1,
-    exportSchema = true
+    exportSchema = false   // fix: was true but no schemaLocation provided → KSP warning
 )
 abstract class MasterDatabase : RoomDatabase() {
 
