@@ -18,6 +18,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.kyronix.swadhyaa.data.repository.Adhyay
+import com.kyronix.swadhyaa.ui.theme.AppColors
+import com.kyronix.swadhyaa.ui.gesture.attachSwipeNavigation
 import com.kyronix.swadhyaa.data.repository.MahabharataRepository
 import com.kyronix.swadhyaa.data.repository.ParbaInfo
 import com.kyronix.swadhyaa.data.repository.Upakhyan
@@ -33,12 +35,16 @@ import kotlinx.coroutines.launch
 class MahabharataActivity : AppCompatActivity() {
 
     companion object {
-        private val BG = Color.parseColor("#0F0D0A")
-        private val SURFACE = Color.parseColor("#17130F")
-        private val IVORY = Color.parseColor("#F5E6C8")
-        private val GOLD = Color.parseColor("#C4A574")
+        // See ReaderActivity.kt / RamayanaActivity.kt for why these are
+        // computed properties (get() =) delegating to live AppColors,
+        // not cached hardcoded vals. STEEL is left as a fixed per-section
+        // highlight, unrelated to Settings' accent choice.
+        private val BG get() = AppColors.bg
+        private val SURFACE get() = AppColors.surface
+        private val IVORY get() = AppColors.ivory
+        private val GOLD get() = AppColors.gold
         private val STEEL = Color.parseColor("#7C93A8") // Mahabharata accent — distinct from Veda/Ramayana
-        private val MUTED = Color.parseColor("#A89070")
+        private val MUTED get() = AppColors.muted
     }
 
     private val vm: MahabharataViewModel by viewModels {
@@ -57,7 +63,9 @@ class MahabharataActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(buildUi())
+        val root = buildUi()
+        root.attachSwipeNavigation(onSwipeLeft = { vm.nextAdhyay() }, onSwipeRight = { vm.prevAdhyay() })
+        setContentView(root)
         observe()
     }
 
