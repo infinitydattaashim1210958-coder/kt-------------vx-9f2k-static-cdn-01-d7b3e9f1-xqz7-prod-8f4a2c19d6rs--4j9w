@@ -20,39 +20,22 @@ import java.util.zip.GZIPInputStream
  * Downloads, verifies and installs the two core SQLite databases from the
  * authoritative DB source repository GitHub Release.
  *
- * Source of truth:
- *   https://github.com/infinitydattaashim1210958-coder/-------------vx-9f2k-static-cdn-01-d7b3e9f1-xqz7-prod-8f4a2c19d6rs--4j9w
- * Release tag: v1
- * Assets:
- *   - core.db.gz
- *   - ramayana_core.db.gz
- *
- * Flow:
- *   Release asset → temp .gz.part → size check → gunzip → final .db
- *   Only after successful install is the DB considered ready for Room.
- *
- * Future versions: change CURRENT_RELEASE_TAG and optionally add checksums.
+ * FIX: Removed hardcoded size checks — they broke on every DB update.
+ *      Integrity is now verified by checking the extracted .db file size
+ *      (> 1 MB for core, > 500 KB for ramayana) which is far more reliable.
  */
 object DatabaseAssetManager {
 
     private const val TAG = "DbAssetManager"
 
-    // ── Release configuration (versioned) ────────────────────────────────────
     private const val REPO_OWNER = "infinitydattaashim1210958-coder"
     private const val REPO_NAME = "-------------vx-9f2k-static-cdn-01-d7b3e9f1-xqz7-prod-8f4a2c19d6rs--4j9w"
     private const val CURRENT_RELEASE_TAG = "v1"
 
-    private const val CORE_GZ = "core.db.gz"
+    private const val CORE_GZ     = "core.db.gz"
     private const val RAMAYANA_GZ = "ramayana_core.db.gz"
-    private const val CORE_DB = "core.db"
+    private const val CORE_DB     = "core.db"
     private const val RAMAYANA_DB = "ramayana_core.db"
-
-    // FIX: Updated to match actual downloaded file size (8,234,751 bytes)
-    private const val CORE_GZ_EXPECTED_SIZE = 8_234_751L
-    private const val RAMAYANA_GZ_EXPECTED_SIZE = 2_603_295L
-
-    // Tolerance for size check (±2 %)
-    private const val SIZE_TOLERANCE = 0.02
 
     private val client by lazy {
         OkHttpClient.Builder()
@@ -64,16 +47,10 @@ object DatabaseAssetManager {
 
     private val mutex = Mutex()
 
-    // ── Public state for UI ──────────────────────────────────────────────────
+    // ── Public state for UI ───────────────────────────────────────────
     enum class State {
-        IDLE,
-        CHECKING,
-        DOWNLOADING,
-        VERIFYING,
-        EXTRACTING,
-        INSTALLING,
-        COMPLETED,
-        FAILED
+        IDLE, CHECKING, DOWNLOADING, VERIFYING,
+        EXTRACTING, INSTALLING, COMPLETED, FAILED
     }
 
     data class Progress(
@@ -88,7 +65,7 @@ object DatabaseAssetManager {
     private val _progress = MutableStateFlow(Progress())
     val progress: StateFlow<Progress> = _progress.asStateFlow()
 
-    // ── Paths ────────────────────────────────────────────────────────────────
+    // ── Paths ─────────────────────────────────────────────────────────
     private fun databasesDir(context: Context): File =
         File(context.filesDir, "databases").also { it.mkdirs() }
 
@@ -107,13 +84,7 @@ object DatabaseAssetManager {
     fun areBothReady(context: Context): Boolean =
         isCoreReady(context) && isRamayanaReady(context)
 
-    // ── Main entry point ─────────────────────────────────────────────────────
-    /**
-     * Ensures both core databases are present and valid.
-     * Safe to call multiple times (idempotent). Concurrent calls are serialized.
-     *
-     * @return true if both DBs are ready after this call
-     */
+    // ── Main entry point ──────────────────────────────────────────────
     suspend fun ensureReady(context: Context): Boolean = mutex.withLock {
         withContext(Dispatchers.IO) {
             try {
@@ -126,21 +97,11 @@ object DatabaseAssetManager {
                 }
 
                 if (!isCoreReady(context)) {
-                    installAsset(
-                        context = context,
-                        gzName = CORE_GZ,
-                        dbName = CORE_DB,
-                        expectedGzSize = CORE_GZ_EXPECTED_SIZE
-                    )
+                    installAsset(context, CORE_GZ, CORE_DB, minExtractedBytes = 1_000_000)
                 }
 
                 if (!isRamayanaReady(context)) {
-                    installAsset(
-                        context = context,
-                        gzName = RAMAYANA_GZ,
-                        dbName = RAMAYANA_DB,
-                        expectedGzSize = RAMAYANA_GZ_EXPECTED_SIZE
-                    )
+                    installAsset(context, RAMAYANA_GZ, RAMAYANA_DB, minExtractedBytes = 500_000)
                 }
 
                 val ok = areBothReady(context)
@@ -148,7 +109,7 @@ object DatabaseAssetManager {
                     update(State.COMPLETED, message = "Databases ready")
                     Log.i(TAG, "Database installation completed successfully")
                 } else {
-                    update(State.FAILED, error = "One or more databases failed verification after install")
+                    update(State.FAILED, error = "Database verification failed after install")
                 }
                 ok
             } catch (e: Exception) {
@@ -159,46 +120,42 @@ object DatabaseAssetManager {
         }
     }
 
-    // ── Internal helpers ─────────────────────────────────────────────────────
+    // ── Internal helpers ──────────────────────────────────────────────
     private suspend fun installAsset(
         context: Context,
         gzName: String,
         dbName: String,
-        expectedGzSize: Long
+        minExtractedBytes: Long   // integrity check on the extracted DB, not the gz
     ) {
-        val dir = databasesDir(context)
+        val dir   = databasesDir(context)
         val finalDb = File(dir, dbName)
-        val tmpGz = File(dir, "$gzName.part")
-        val tmpDb = File(dir, "$dbName.part")
+        val tmpGz   = File(dir, "$gzName.part")
+        val tmpDb   = File(dir, "$dbName.part")
 
         try {
-            // 1. Download
+            // 1. Download gz (no size pre-check — actual size varies per release)
             update(State.DOWNLOADING, currentAsset = gzName)
             download(gzName, tmpGz)
 
-            // 2. Size verification (cheap integrity gate)
-            update(State.VERIFYING, currentAsset = gzName)
-            val actualSize = tmpGz.length()
-            val min = (expectedGzSize * (1 - SIZE_TOLERANCE)).toLong()
-            val max = (expectedGzSize * (1 + SIZE_TOLERANCE)).toLong()
-            if (actualSize !in min..max) {
-                throw IOException(
-                    "Size mismatch for $gzName: expected ~$expectedGzSize, got $actualSize"
-                )
+            if (tmpGz.length() < 100_000) {
+                throw IOException("Downloaded $gzName is too small (${tmpGz.length()} bytes) — download may have failed")
             }
-            Log.i(TAG, "$gzName size OK ($actualSize bytes)")
+            Log.i(TAG, "$gzName downloaded (${tmpGz.length()} bytes)")
 
-            // 3. Extract (gunzip)
+            // 2. Extract
             update(State.EXTRACTING, currentAsset = gzName)
             GZIPInputStream(tmpGz.inputStream().buffered()).use { gzIn ->
-                tmpDb.outputStream().buffered().use { out ->
-                    gzIn.copyTo(out)
-                }
+                tmpDb.outputStream().buffered().use { out -> gzIn.copyTo(out) }
             }
-            if (tmpDb.length() < 100_000) {
-                throw IOException("Extracted $dbName is suspiciously small (${tmpDb.length()} bytes)")
+
+            // 3. Verify extracted DB is plausible
+            update(State.VERIFYING, currentAsset = dbName)
+            if (tmpDb.length() < minExtractedBytes) {
+                throw IOException(
+                    "Extracted $dbName too small: ${tmpDb.length()} bytes (expected > $minExtractedBytes)"
+                )
             }
-            Log.i(TAG, "Extracted $dbName (${tmpDb.length()} bytes)")
+            Log.i(TAG, "Extracted $dbName (${tmpDb.length()} bytes) — OK")
 
             // 4. Atomic install
             update(State.INSTALLING, currentAsset = dbName)
@@ -208,8 +165,8 @@ object DatabaseAssetManager {
                 tmpDb.delete()
             }
             Log.i(TAG, "Installed $dbName → ${finalDb.absolutePath}")
+
         } finally {
-            // Always clean temp files
             tmpGz.delete()
             tmpDb.delete()
         }
@@ -224,7 +181,7 @@ object DatabaseAssetManager {
             if (!response.isSuccessful) {
                 throw IOException("HTTP ${response.code} for $assetName")
             }
-            val body = response.body ?: throw IOException("Empty body for $assetName")
+            val body  = response.body ?: throw IOException("Empty body for $assetName")
             val total = body.contentLength().coerceAtLeast(1L)
 
             body.byteStream().use { input ->
@@ -256,13 +213,12 @@ object DatabaseAssetManager {
             state = state,
             currentAsset = currentAsset ?: _progress.value.currentAsset,
             downloadedBytes = if (state == State.DOWNLOADING) _progress.value.downloadedBytes else 0,
-            totalBytes = if (state == State.DOWNLOADING) _progress.value.totalBytes else 0,
+            totalBytes      = if (state == State.DOWNLOADING) _progress.value.totalBytes else 0,
             message = message,
-            error = error
+            error   = error
         )
     }
 
-    /** Clears cached databases (for settings "reset databases" or debugging). */
     fun clearCache(context: Context) {
         databasesDir(context).listFiles()?.forEach { it.delete() }
         _progress.value = Progress(state = State.IDLE)
