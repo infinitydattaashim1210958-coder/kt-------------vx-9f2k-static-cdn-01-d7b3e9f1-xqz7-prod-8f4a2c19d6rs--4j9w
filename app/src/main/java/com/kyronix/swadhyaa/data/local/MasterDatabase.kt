@@ -8,6 +8,9 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.kyronix.swadhyaa.data.local.dao.MasterDao
 import com.kyronix.swadhyaa.data.local.entity.InstalledPackageEntity
+import com.kyronix.swadhyaa.data.local.entity.LibraryBookChapterEntity
+import com.kyronix.swadhyaa.data.local.entity.LibraryBookParagraphEntity
+import com.kyronix.swadhyaa.data.local.entity.LibraryBookRefEntity
 import com.kyronix.swadhyaa.data.local.entity.MahabharataAdhyayaEntity
 import com.kyronix.swadhyaa.data.local.entity.MahabharataUpakhyanaEntity
 import com.kyronix.swadhyaa.data.local.entity.RamayanaBhashyaContentEntity
@@ -18,6 +21,22 @@ import com.kyronix.swadhyaa.data.local.entity.VedaBhashyaContentEntity
  * All content arrives via pack merges (WorkManager).
  *
  * Migration policy: additive only. Never drop tables or columns.
+ *
+ * ── ARCHITECTURE STATUS (see RISK_REGISTER.md R5, DATABASE_CONTRACT.md §4) ──
+ * UPDATE: now wired in for Digital Library's "db"-type books
+ * (LibraryDbBookRepository merges downloaded book packs here and queries
+ * them here — see that class). Veda/Ramayana/Mahabharata bhāṣya remain on
+ * the pre-existing direct-pack-query path (BhashyaRepository,
+ * RamayanaBhashyaRepository, MahabharataRepository via
+ * PackDownloadManager) — this pass deliberately did not touch those three,
+ * to avoid risking already-working functionality without the ability to
+ * run a real build in this environment. So: this class is no longer
+ * entirely dead code, but it's also not yet the single consistent
+ * architecture DATABASE_CONTRACT.md §4 discusses — Library uses it,
+ * the other three corpora's bhāṣya packs still don't. That remains a
+ * decision for a future pass: finish the consolidation (wire the other
+ * three in too) or accept the split deliberately and document it as such
+ * rather than as an oversight.
  */
 @Database(
     entities = [
@@ -25,10 +44,13 @@ import com.kyronix.swadhyaa.data.local.entity.VedaBhashyaContentEntity
         VedaBhashyaContentEntity::class,
         RamayanaBhashyaContentEntity::class,
         MahabharataAdhyayaEntity::class,
-        MahabharataUpakhyanaEntity::class
+        MahabharataUpakhyanaEntity::class,
+        LibraryBookChapterEntity::class,
+        LibraryBookParagraphEntity::class,
+        LibraryBookRefEntity::class
     ],
     version = 1,
-    exportSchema = false   // fix: was true but no schemaLocation provided → KSP warning
+    exportSchema = true
 )
 abstract class MasterDatabase : RoomDatabase() {
 
@@ -59,6 +81,22 @@ abstract class MasterDatabase : RoomDatabase() {
                         db.execSQL("PRAGMA journal_mode=WAL;")
                         db.execSQL("PRAGMA synchronous=NORMAL;")
                         db.execSQL("PRAGMA foreign_keys=ON;")
+
+                        // Room only creates tables for its declared @Entity
+                        // classes — it has no concept of FTS5 virtual
+                        // tables, so this one (needed for library book
+                        // search) has to be created by hand, exactly as
+                        // legacy's master-db.js does with its own msExec()
+                        // call. Verified against that exact DDL, including
+                        // the UNINDEXED columns and the rowid = paragraph
+                        // id convention LibraryDbBookRepository relies on.
+                        db.execSQL(
+                            """
+                            CREATE VIRTUAL TABLE IF NOT EXISTS library_book_paragraphs_fts USING fts5(
+                                content, book_id UNINDEXED, chapter_id UNINDEXED, para_id UNINDEXED
+                            );
+                            """.trimIndent()
+                        )
                     }
                 })
                 // Future migrations go here. Additive only.
