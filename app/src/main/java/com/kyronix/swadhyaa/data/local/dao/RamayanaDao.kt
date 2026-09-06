@@ -68,4 +68,22 @@ interface RamayanaDao {
     @Query("SELECT COUNT(*) FROM shlokas WHERE kanda_id = :kandaId")
     suspend fun getShlokaCount(kandaId: Int): Int
 
+    /**
+     * Matches legacy ramayana.js's ramGetShlokaByRef exactly:
+     *   SELECT * FROM shlokas WHERE kanda_id=? AND sarga_id=? AND id=? LIMIT 1
+     * Legacy's ref format is "K<kandaId>.S<sargaId>.<shlokaId>" — all three
+     * are raw row ids from the shlokas table, not chapter/sarga numbers.
+     * Verified directly against legacy source (ramayana.js line ~210 and
+     * app.js's ref-building call sites) before writing this — see
+     * LegacyMigrationEngine.kt's resolveRamayanaShloka() for the parser.
+     */
+    @Query(
+        """
+        SELECT * FROM shlokas
+        WHERE kanda_id = :kandaId AND sarga_id = :sargaId AND id = :shlokaId
+        LIMIT 1
+        """
+    )
+    suspend fun getShlokaByRef(kandaId: Int, sargaId: Int, shlokaId: Int): ShlokaEntity?
+
 }
