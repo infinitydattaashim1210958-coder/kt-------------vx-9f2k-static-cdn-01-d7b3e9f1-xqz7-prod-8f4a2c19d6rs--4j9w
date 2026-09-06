@@ -5,13 +5,16 @@ import android.graphics.Typeface
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.kyronix.swadhyaa.data.local.CoreDatabase
+import com.kyronix.swadhyaa.data.local.DatabaseAssetManager
 import com.kyronix.swadhyaa.data.local.RamayanaCoreDatabase
 import com.kyronix.swadhyaa.data.prefs.UserPrefs
 import com.kyronix.swadhyaa.data.repository.SearchRepository
@@ -25,17 +28,29 @@ import kotlinx.coroutines.launch
 
 /**
  * App shell: Home · Library · Bookmarks · Search · Settings
- * Implements M8 A–D foundation on one activity (phone-friendly).
+ *
+ * FIX: CoreDatabase / RamayanaCoreDatabase must NOT be opened until
+ * DatabaseAssetManager.ensureReady() has returned true. On a fresh install
+ * the DBs are downloaded in SwadhyayApp's background scope; ShellActivity
+ * used to call getInstance() immediately in onCreate(), which triggered the
+ * require() guard inside build() → IllegalArgumentException → crash.
+ *
+ * Solution: show a loading screen, collect DatabaseAssetManager.progress
+ * until state == COMPLETED (or FAILED), then initialise the repos and
+ * render the real UI.
  */
 class ShellActivity : AppCompatActivity() {
 
     private enum class Tab { HOME, LIBRARY, BOOKMARKS, SEARCH, SETTINGS }
 
+    // These are null until the DB is confirmed ready
+    private var vedaRepo: VedaRepository? = null
+    private var searchRepo: SearchRepository? = null
+
+    private lateinit var prefs: UserPrefs
+    private lateinit var root: LinearLayout
     private lateinit var content: LinearLayout
     private lateinit var tabBar: LinearLayout
-    private lateinit var prefs: UserPrefs
-    private lateinit var vedaRepo: VedaRepository
-    private lateinit var searchRepo: SearchRepository
 
     private var current = Tab.HOME
     private var searchJob: Job? = null
@@ -45,15 +60,139 @@ class ShellActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = UserPrefs(this)
-        val core = CoreDatabase.getInstance(this)
-        val ram = RamayanaCoreDatabase.getInstance(this)
-        vedaRepo = VedaRepository(core)
-        searchRepo = SearchRepository(core, ram)
 
-        val root = LinearLayout(this).apply {
+        root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(AppColors.bg)
         }
+        setContentView(root)
+
+        // Show loading screen first, wait for DB, then build real UI
+        showLoadingScreen()
+        waitForDatabaseThenInit()
+    }
+
+    // ── Loading screen ────────────────────────────────────────────────
+
+    private fun showLoadingScreen() {
+        root.removeAllViews()
+
+        val wrapper = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+
+        val title = TextView(this).apply {
+            text = "স্বাধ্যায়"
+            textSize = 28f
+            setTextColor(AppColors.gold)
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+        }
+        val subtitle = TextView(this).apply {
+            text = "সনাতন ধর্মশাস্ত্র"
+            textSize = 14f
+            setTextColor(AppColors.muted)
+            gravity = Gravity.CENTER
+            setPadding(0, dp(4), 0, dp(32))
+        }
+        val spinner = ProgressBar(this).apply {
+            isIndeterminate = true
+            indeterminateDrawable?.setTint(AppColors.saffron)
+            layoutParams = LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+            }
+        }
+        val statusText = TextView(this).apply {
+            tag = "status"
+            text = "ডেটাবেস প্রস্তুত হচ্ছে…"
+            textSize = 13f
+            setTextColor(AppColors.muted)
+            gravity = Gravity.CENTER
+            setPadding(dp(32), dp(16), dp(32), 0)
+        }
+
+        wrapper.addView(title)
+        wrapper.addView(subtitle)
+        wrapper.addView(spinner)
+        wrapper.addView(statusText)
+        root.addView(wrapper)
+    }
+
+    private fun updateLoadingStatus(msg: String) {
+        val tv = root.findViewWithTag<TextView>("status") ?: return
+        tv.text = msg
+    }
+
+    // ── Wait for DB, then initialise ──────────────────────────────────
+
+    private fun waitForDatabaseThenInit() {
+        lifecycleScope.launch {
+            // Collect progress until terminal state
+            DatabaseAssetManager.progress.collect { progress ->
+                when (progress.state) {
+                    DatabaseAssetManager.State.IDLE,
+                    DatabaseAssetManager.State.CHECKING -> {
+                        updateLoadingStatus("ডেটাবেস পরীক্ষা করা হচ্ছে…")
+                    }
+                    DatabaseAssetManager.State.DOWNLOADING -> {
+                        val pct = if (progress.totalBytes > 0)
+                            " (${(progress.downloadedBytes * 100 / progress.totalBytes)}%)"
+                        else ""
+                        updateLoadingStatus("ডাউনলোড হচ্ছে${pct}…\n${progress.currentAsset ?: ""}")
+                    }
+                    DatabaseAssetManager.State.VERIFYING  -> updateLoadingStatus("যাচাই করা হচ্ছে…")
+                    DatabaseAssetManager.State.EXTRACTING -> updateLoadingStatus("প্রক্রিয়া করা হচ্ছে…")
+                    DatabaseAssetManager.State.INSTALLING -> updateLoadingStatus("ইনস্টল হচ্ছে…")
+
+                    DatabaseAssetManager.State.COMPLETED -> {
+                        // DB files are on disk — safe to open Room now
+                        initReposAndBuildUi()
+                        return@collect   // stop collecting
+                    }
+
+                    DatabaseAssetManager.State.FAILED -> {
+                        showError(progress.error ?: "অজানা ত্রুটি")
+                        return@collect
+                    }
+                }
+            }
+        }
+    }
+
+    private fun initReposAndBuildUi() {
+        try {
+            val core = CoreDatabase.getInstance(this)
+            val ram  = RamayanaCoreDatabase.getInstance(this)
+            vedaRepo   = VedaRepository(core)
+            searchRepo = SearchRepository(core, ram)
+            buildFullUi()
+        } catch (e: Exception) {
+            showError("DB খুলতে ব্যর্থ: ${e.message}")
+        }
+    }
+
+    private fun showError(msg: String) {
+        root.removeAllViews()
+        val tv = TextView(this).apply {
+            text = "⚠ ডেটাবেস লোড ব্যর্থ\n\n$msg\n\nঅ্যাপ পুনরায় চালু করুন।"
+            setTextColor(AppColors.vermilion)
+            textSize = 14f
+            setPadding(dp(24), dp(48), dp(24), 0)
+            gravity = Gravity.CENTER
+        }
+        root.addView(tv)
+    }
+
+    // ── Full UI (only called after DB is ready) ───────────────────────
+
+    private fun buildFullUi() {
+        root.removeAllViews()   // clear loading screen
+
         val scroll = ScrollView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
@@ -64,13 +203,8 @@ class ShellActivity : AppCompatActivity() {
             setPadding(dp(16), dp(16), dp(16), dp(16))
         }
         scroll.addView(content)
-        tabBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(AppColors.surface)
-            setPadding(dp(4), dp(8), dp(4), dp(8))
-        }
 
-        // শাস্ত্র-সহায়ক FAB button (tab bar-এর উপরে)
+        // শাস্ত্র-সহায়ক button (above tab bar)
         val agentBtn = TextView(this).apply {
             text = "✦ শাস্ত্র-সহায়ক"
             textSize = 14f
@@ -87,10 +221,15 @@ class ShellActivity : AppCompatActivity() {
             }
         }
 
+        tabBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(AppColors.surface)
+            setPadding(dp(4), dp(8), dp(4), dp(8))
+        }
+
         root.addView(scroll)
-        root.addView(agentBtn)   // tab bar-এর ঠিক উপরে
+        root.addView(agentBtn)
         root.addView(tabBar)
-        setContentView(root)
 
         buildTabs()
         show(Tab.HOME)
@@ -98,17 +237,22 @@ class ShellActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (current == Tab.HOME || current == Tab.BOOKMARKS) show(current)
+        // Only refresh if UI is already built (DB was ready)
+        if (vedaRepo != null && (current == Tab.HOME || current == Tab.BOOKMARKS)) {
+            show(current)
+        }
     }
+
+    // ── Tab helpers ───────────────────────────────────────────────────
 
     private fun buildTabs() {
         tabBar.removeAllViews()
         listOf(
-            Tab.HOME to "হোম",
-            Tab.LIBRARY to "লাইব্রেরি",
+            Tab.HOME      to "হোম",
+            Tab.LIBRARY   to "লাইব্রেরি",
             Tab.BOOKMARKS to "বুকমার্ক",
-            Tab.SEARCH to "খুঁজুন",
-            Tab.SETTINGS to "সেটিংস"
+            Tab.SEARCH    to "খুঁজুন",
+            Tab.SETTINGS  to "সেটিংস"
         ).forEach { (tab, label) ->
             val t = TextView(this).apply {
                 text = label
@@ -117,7 +261,9 @@ class ShellActivity : AppCompatActivity() {
                 setPadding(dp(4), dp(10), dp(4), dp(10))
                 setTextColor(if (tab == current) AppColors.saffron else AppColors.muted)
                 setOnClickListener { show(tab) }
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                layoutParams = LinearLayout.LayoutParams(
+                    0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
+                )
             }
             tabBar.addView(t)
         }
@@ -128,13 +274,15 @@ class ShellActivity : AppCompatActivity() {
         buildTabs()
         content.removeAllViews()
         when (tab) {
-            Tab.HOME -> renderHome()
-            Tab.LIBRARY -> renderLibrary()
+            Tab.HOME      -> renderHome()
+            Tab.LIBRARY   -> renderLibrary()
             Tab.BOOKMARKS -> renderBookmarks()
-            Tab.SEARCH -> renderSearch()
-            Tab.SETTINGS -> renderSettings()
+            Tab.SEARCH    -> renderSearch()
+            Tab.SETTINGS  -> renderSettings()
         }
     }
+
+    // ── View helpers ──────────────────────────────────────────────────
 
     private fun title(text: String) = TextView(this).apply {
         this.text = text
@@ -156,21 +304,21 @@ class ShellActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(AppColors.surface)
             setPadding(dp(14), dp(14), dp(14), dp(14))
-            val lp = LinearLayout.LayoutParams(
+            layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(10) }
-            layoutParams = lp
             block()
         }
     }
+
+    // ── Tab renderers ─────────────────────────────────────────────────
 
     private fun renderHome() {
         content.addView(title("স্বাধ্যায়"))
         content.addView(subtitle("সনাতন ধর্মশাস্ত্র"))
 
         lifecycleScope.launch {
-            // Continue reading
             val cont = prefs.continueFlow.first()
             if (cont != null) {
                 content.addView(card {
@@ -197,8 +345,9 @@ class ShellActivity : AppCompatActivity() {
             }
 
             try {
-                val vedas = vedaRepo.getVedaSummaries()
-                val total = vedaRepo.getTotalMantraCount()
+                val repo = vedaRepo ?: return@launch
+                val vedas = repo.getVedaSummaries()
+                val total = repo.getTotalMantraCount()
                 content.addView(TextView(this@ShellActivity).apply {
                     text = "Database OK — $total mantras"
                     setTextColor(AppColors.gold)
@@ -225,7 +374,6 @@ class ShellActivity : AppCompatActivity() {
                         }
                     })
                 }
-                // Ramayana entry
                 content.addView(card {
                     addView(TextView(this@ShellActivity).apply {
                         text = "রামায়ণ"
@@ -251,7 +399,8 @@ class ShellActivity : AppCompatActivity() {
         content.addView(title("লাইব্রেরি"))
         content.addView(subtitle("Vedas · Itihāsa"))
         lifecycleScope.launch {
-            vedaRepo.getVedaSummaries().forEach { v ->
+            val repo = vedaRepo ?: return@launch
+            repo.getVedaSummaries().forEach { v ->
                 content.addView(card {
                     addView(TextView(this@ShellActivity).apply {
                         text = v.name
@@ -342,6 +491,7 @@ class ShellActivity : AppCompatActivity() {
         content.addView(results)
 
         fun runSearch(q: String) {
+            val repo = searchRepo ?: return
             searchJob?.cancel()
             searchJob = lifecycleScope.launch {
                 results.removeAllViews()
@@ -351,7 +501,7 @@ class ShellActivity : AppCompatActivity() {
                     setTextColor(AppColors.muted)
                 })
                 try {
-                    val hits = searchRepo.search(q.trim())
+                    val hits = repo.search(q.trim())
                     results.removeAllViews()
                     if (hits.isEmpty()) {
                         results.addView(TextView(this@ShellActivity).apply {
