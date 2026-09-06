@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Paths FileProvider is allowed to serve as content:// URIs.
+  Only library_books/ (downloaded HTML book files) is exposed — nothing
+  else in internal storage is shareable through this provider.
+  See AndroidManifest.xml's <provider> entry and
+  LibraryHtmlBookRepository.getShareableUri().
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="library_books" path="library_books/" />
+</paths>
