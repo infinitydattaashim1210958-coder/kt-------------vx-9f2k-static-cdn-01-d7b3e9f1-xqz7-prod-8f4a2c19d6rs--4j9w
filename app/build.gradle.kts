@@ -1,7 +1,15 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+}
+
+// Read local.properties safely (key missing → empty string, no crash)
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) load(f.inputStream())
 }
 
 android {
@@ -15,6 +23,13 @@ android {
         versionCode = 1
         versionName = "2.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Gemini API key — stored in local.properties, never committed to git
+        buildConfigField(
+            "String",
+            "GEMINI_API_KEY",
+            "\"${localProps.getProperty("gemini_api_key", "")}\""
+        )
     }
 
     buildTypes {
@@ -34,6 +49,10 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    buildFeatures {
+        buildConfig = true   // BuildConfig.GEMINI_API_KEY এর জন্য দরকার
     }
 
     // Critical: do not compress .db assets (matches original Capacitor CI)
@@ -74,7 +93,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.xerial:sqlite-jdbc:3.45.3.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
-    
-    // HTTP (pack downloads)
+
+    // HTTP (pack downloads + Gemini AI agent)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
