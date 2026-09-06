@@ -3,6 +3,7 @@ package com.kyronix.swadhyaa.data.remote
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import com.kyronix.swadhyaa.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -14,22 +15,17 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * Gemini 2.0 Flash — free tier (1 500 requests/day, no billing needed).
+ * Gemini 2.5 Flash — free tier (500 requests/day, no billing needed).
  *
- * API key: get yours free at https://aistudio.google.com → "Get API key"
- * Replace GEMINI_API_KEY below with your actual key.
- *
- * Endpoint used:
- *   POST https://generativelanguage.googleapis.com/v1beta/models/
- *        gemini-2.0-flash:generateContent?key=<KEY>
+ * API key: get yours free at https://aistudio.google.com/apikey
+ * Store in local.properties:  gemini_api_key=AIzaSy...
+ * Never hardcode or commit the key to git.
  */
 object AiAgentService {
 
-    // ── ⚠️  API key ──────────────
-    private const val GEMINI_API_KEY = BuildConfig.GEMINI_API_KEY
-    // ──────────────────────────────────────────────────────────────────
+    private val GEMINI_API_KEY: String get() = BuildConfig.GEMINI_API_KEY
 
-    private const val MODEL = "gemini-2.0-flash"
+    private const val MODEL = "gemini-2.5-flash"
     private const val BASE_URL =
         "https://generativelanguage.googleapis.com/v1beta/models/$MODEL:generateContent"
 
@@ -68,13 +64,11 @@ object AiAgentService {
             val userPrompt = buildUserPrompt(userQuestion, searchContext)
 
             val bodyJson = JSONObject().apply {
-                // System instruction
                 put("system_instruction", JSONObject().apply {
                     put("parts", JSONArray().apply {
                         put(JSONObject().put("text", systemInstruction))
                     })
                 })
-                // User message
                 put("contents", JSONArray().apply {
                     put(JSONObject().apply {
                         put("role", "user")
@@ -83,9 +77,8 @@ object AiAgentService {
                         })
                     })
                 })
-                // Generation config
                 put("generationConfig", JSONObject().apply {
-                    put("temperature", 0.3)          // শাস্ত্রীয় বিষয়ে accurate থাকার জন্য কম
+                    put("temperature", 0.3)
                     put("maxOutputTokens", 800)
                     put("topP", 0.8)
                 })
