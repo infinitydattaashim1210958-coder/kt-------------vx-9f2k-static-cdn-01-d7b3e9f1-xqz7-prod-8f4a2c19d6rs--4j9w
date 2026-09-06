@@ -27,5 +27,10 @@
             android:name=".presentation.reader.ReaderActivity"
             android:exported="false"
             android:theme="@style/Theme.Swadhyay" />
+        <activity
+            android:name=".presentation.agent.AgentActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.Swadhyay" />
     </application>
 </manifest>
