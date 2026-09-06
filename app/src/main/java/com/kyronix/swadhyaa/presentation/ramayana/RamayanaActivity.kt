@@ -17,6 +17,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.kyronix.swadhyaa.data.local.RamayanaCoreDatabase
+import com.kyronix.swadhyaa.ui.theme.AppColors
+import com.kyronix.swadhyaa.ui.gesture.attachSwipeNavigation
 import com.kyronix.swadhyaa.data.repository.BhashyaField
 import com.kyronix.swadhyaa.data.repository.RamayanaBhashyaRepository
 import com.kyronix.swadhyaa.data.repository.RamayanaRepository
@@ -32,12 +34,20 @@ import kotlinx.coroutines.launch
 class RamayanaActivity : AppCompatActivity() {
 
     companion object {
-        private val BG = Color.parseColor("#0F0D0A")
-        private val SURFACE = Color.parseColor("#17130F")
-        private val IVORY = Color.parseColor("#F5E6C8")
-        private val GOLD = Color.parseColor("#C4A574")
+        // Base tokens delegate to the live, accent-aware AppColors object
+        // (computed properties, not cached vals — see ReaderActivity.kt's
+        // identical fix for why that distinction matters for recreate()).
+        // COPPER is left as a fixed per-section highlight, unrelated to
+        // Settings' accent choice — not verified against legacy (which
+        // applies one global accent everywhere, no per-corpus hue), but
+        // not removed either since it's existing visual design, not a
+        // known defect.
+        private val BG get() = AppColors.bg
+        private val SURFACE get() = AppColors.surface
+        private val IVORY get() = AppColors.ivory
+        private val GOLD get() = AppColors.gold
         private val COPPER = Color.parseColor("#C1652B") // Ramayana accent — distinct from Veda's saffron
-        private val MUTED = Color.parseColor("#A89070")
+        private val MUTED get() = AppColors.muted
     }
 
     // Traditional Bangla names for the 6 kandas, keyed by the DB's English name column.
@@ -68,7 +78,9 @@ class RamayanaActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(buildUi())
+        val root = buildUi()
+        root.attachSwipeNavigation(onSwipeLeft = { vm.next() }, onSwipeRight = { vm.prev() })
+        setContentView(root)
         observe()
     }
 
