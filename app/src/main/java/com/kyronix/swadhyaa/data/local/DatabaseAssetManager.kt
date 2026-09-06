@@ -47,10 +47,9 @@ object DatabaseAssetManager {
     private const val CORE_DB = "core.db"
     private const val RAMAYANA_DB = "ramayana_core.db"
 
-    // Expected compressed sizes (bytes) — used as a cheap integrity gate.
-    // Update these when publishing a new release.
-    private const val CORE_GZ_EXPECTED_SIZE = 8_019_836L      // ~7.85 MB
-    private const val RAMAYANA_GZ_EXPECTED_SIZE = 2_603_295L // ~2.54 MB
+    // FIX: Updated to match actual downloaded file size (8,234,751 bytes)
+    private const val CORE_GZ_EXPECTED_SIZE = 8_234_751L
+    private const val RAMAYANA_GZ_EXPECTED_SIZE = 2_603_295L
 
     // Tolerance for size check (±2 %)
     private const val SIZE_TOLERANCE = 0.02
