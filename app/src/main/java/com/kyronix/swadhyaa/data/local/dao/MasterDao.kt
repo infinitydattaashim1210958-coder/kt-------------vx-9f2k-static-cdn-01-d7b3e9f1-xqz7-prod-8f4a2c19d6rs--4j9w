@@ -5,6 +5,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.SkipQueryVerification
 import androidx.room.Transaction
 import com.kyronix.swadhyaa.data.local.entity.InstalledPackageEntity
 import com.kyronix.swadhyaa.data.local.entity.LibraryBookChapterEntity
@@ -146,6 +147,7 @@ interface MasterDao {
     @Query("DELETE FROM library_book_chapters WHERE book_id = :bookId")
     suspend fun deleteLibraryChapters(bookId: String)
 
+    @SkipQueryVerification
     @Query("DELETE FROM library_book_paragraphs_fts WHERE book_id = :bookId")
     suspend fun deleteLibraryParagraphsFts(bookId: String)
 
@@ -166,6 +168,7 @@ interface MasterDao {
      * risk of the FTS rows getting out of order relative to what Room
      * actually assigned.
      */
+    @SkipQueryVerification
     @Query(
         """
         INSERT INTO library_book_paragraphs_fts (rowid, content, book_id, chapter_id, para_id)
@@ -198,6 +201,7 @@ interface MasterDao {
      * SearchRepository.escapeFtsQuery / R10) — this DAO does not escape it
      * itself, matching how VedaDao's raw FTS queries work.
      */
+    @SkipQueryVerification
     @Query(
         """
         SELECT chapter_id, content FROM library_book_paragraphs_fts
