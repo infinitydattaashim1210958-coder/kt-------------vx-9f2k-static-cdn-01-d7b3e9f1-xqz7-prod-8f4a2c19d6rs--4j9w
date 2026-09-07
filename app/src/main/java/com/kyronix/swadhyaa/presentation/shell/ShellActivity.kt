@@ -5,10 +5,13 @@ import android.graphics.Typeface
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
+import android.widget.AlertDialog
 import android.widget.EditText
+import android.widget.GridLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.kyronix.swadhyaa.data.local.CoreDatabase
@@ -17,6 +20,9 @@ import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.data.prefs.UserPrefs
 import com.kyronix.swadhyaa.data.repository.SearchRepository
 import com.kyronix.swadhyaa.data.repository.VedaRepository
+import com.kyronix.swadhyaa.domain.model.VedaSummary
+import com.kyronix.swadhyaa.presentation.mahabharata.MahabharataActivity
+import com.kyronix.swadhyaa.presentation.ramayana.RamayanaActivity
 import com.kyronix.swadhyaa.presentation.reader.ReaderActivity
 import com.kyronix.swadhyaa.ui.theme.AppColors
 import kotlinx.coroutines.Job
@@ -40,6 +46,7 @@ class ShellActivity : AppCompatActivity() {
 
     private var current = Tab.HOME
     private var searchJob: Job? = null
+    private var renderJob: Job? = null
     private val density by lazy { resources.displayMetrics.density }
     private fun dp(v: Int) = (v * density).toInt()
 
@@ -77,10 +84,19 @@ class ShellActivity : AppCompatActivity() {
 
         buildTabs()
         show(Tab.HOME)
+        justCreated = true
     }
+
+    private var justCreated = false
 
     override fun onResume() {
         super.onResume()
+        if (justCreated) {
+            // onCreate already rendered the current tab; skip the
+            // redundant re-render Android triggers on first resume.
+            justCreated = false
+            return
+        }
         if (current == Tab.HOME || current == Tab.BOOKMARKS) show(current)
     }
 
@@ -109,9 +125,10 @@ class ShellActivity : AppCompatActivity() {
     private fun show(tab: Tab) {
         current = tab
         buildTabs()
+        renderJob?.cancel()
         content.removeAllViews()
         when (tab) {
-            Tab.HOME -> renderHome()
+            Tab.HOME -> renderJob = lifecycleScope.launch { renderHome() }
             Tab.LIBRARY -> renderLibrary()
             Tab.BOOKMARKS -> renderBookmarks()
             Tab.SEARCH -> renderSearch()
@@ -148,88 +165,154 @@ class ShellActivity : AppCompatActivity() {
         }
     }
 
-    private fun renderHome() {
+    private data class HomeSection(
+        val icon: String,
+        val label: String,
+        val action: HomeAction
+    )
+
+    private sealed class HomeAction {
+        data object Vedas : HomeAction()
+        data object Ramayana : HomeAction()
+        data object Mahabharata : HomeAction()
+        data object Library : HomeAction()
+        data object Soon : HomeAction()
+    }
+
+    // 1:1 port of HOME_SECTIONS from the old app's www/js/app.js
+    private val homeSections = listOf(
+        HomeSection("🕉", "বেদ", HomeAction.Vedas),
+        HomeSection("🏹", "রামায়ণ", HomeAction.Ramayana),
+        HomeSection("⚔️", "মহাভারত", HomeAction.Mahabharata),
+        HomeSection("📖", "পুরাণ", HomeAction.Soon),
+        HomeSection("🔥", "ব্রাহ্মণ", HomeAction.Soon),
+        HomeSection("🪔", "উপনিষদ", HomeAction.Soon),
+        HomeSection("🌳", "আরণ্যক", HomeAction.Soon),
+        HomeSection("🔤", "নিরুক্তশাস্ত্র", HomeAction.Soon),
+        HomeSection("🎵", "ছন্দশাস্ত্র", HomeAction.Soon),
+        HomeSection("🎓", "শিক্ষাশাস্ত্র", HomeAction.Soon),
+        HomeSection("🕯", "তন্ত্র", HomeAction.Soon),
+        HomeSection("📜", "স্মৃতি", HomeAction.Soon),
+        HomeSection("🏠", "গৃহ্যসূত্র", HomeAction.Soon),
+        HomeSection("⚖️", "ধর্মসূত্র", HomeAction.Soon),
+        HomeSection("📚", "ডিজিটাল লাইব্রেরি", HomeAction.Library)
+    )
+
+    private var homeVedaSummaries: List<VedaSummary> = emptyList()
+
+    private suspend fun renderHome() {
         content.addView(title("স্বাধ্যায়"))
-        content.addView(subtitle("সনাতন ধর্মশাস্ত্র"))
+        content.addView(subtitle("ও৩ম্ কৃণ্বন্তো বিশ্বমার্যম্"))
 
-        lifecycleScope.launch {
-            // Continue reading
-            val cont = prefs.continueFlow.first()
-            if (cont != null) {
-                content.addView(card {
-                    addView(TextView(this@ShellActivity).apply {
-                        text = "Continue reading"
-                        setTextColor(AppColors.muted)
-                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-                    })
-                    addView(TextView(this@ShellActivity).apply {
-                        text = cont.label
-                        setTextColor(AppColors.ivory)
-                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                        setPadding(0, dp(4), 0, 0)
-                    })
-                    setOnClickListener {
-                        if (cont.kind == "veda") {
-                            startActivity(
-                                Intent(this@ShellActivity, ReaderActivity::class.java)
-                                    .putExtra(ReaderActivity.EXTRA_VEDA_ID, cont.corpusId)
-                            )
-                        }
+        // Continue reading — kept from the shell's existing behavior
+        val cont = prefs.continueFlow.first()
+        if (cont != null) {
+            content.addView(card {
+                addView(TextView(this@ShellActivity).apply {
+                    text = "আপনার পড়া চালিয়ে যান"
+                    setTextColor(AppColors.muted)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                })
+                addView(TextView(this@ShellActivity).apply {
+                    text = cont.label
+                    setTextColor(AppColors.ivory)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                    setPadding(0, dp(4), 0, 0)
+                })
+                setOnClickListener {
+                    if (cont.kind == "veda") {
+                        startActivity(
+                            Intent(this@ShellActivity, ReaderActivity::class.java)
+                                .putExtra(ReaderActivity.EXTRA_VEDA_ID, cont.corpusId)
+                        )
                     }
-                })
-            }
-
-            try {
-                val vedas = vedaRepo.getVedaSummaries()
-                val total = vedaRepo.getTotalMantraCount()
-                content.addView(TextView(this@ShellActivity).apply {
-                    text = "Database OK — $total mantras"
-                    setTextColor(AppColors.gold)
-                    setPadding(0, 0, 0, dp(12))
-                })
-                vedas.forEach { v ->
-                    content.addView(card {
-                        addView(TextView(this@ShellActivity).apply {
-                            text = v.name
-                            setTextColor(AppColors.saffron)
-                            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
-                            typeface = Typeface.DEFAULT_BOLD
-                        })
-                        addView(TextView(this@ShellActivity).apply {
-                            text = "${v.mantraCount} mantras · ${v.code}"
-                            setTextColor(AppColors.muted)
-                            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                        })
-                        setOnClickListener {
-                            startActivity(
-                                Intent(this@ShellActivity, ReaderActivity::class.java)
-                                    .putExtra(ReaderActivity.EXTRA_VEDA_ID, v.id)
-                            )
-                        }
-                    })
                 }
-                // Ramayana entry
-                content.addView(card {
-                    addView(TextView(this@ShellActivity).apply {
-                        text = "রামায়ণ"
-                        setTextColor(AppColors.saffron)
-                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
-                        typeface = Typeface.DEFAULT_BOLD
-                    })
-                    addView(TextView(this@ShellActivity).apply {
-                        text = "৬ কাণ্ড · core offline"
-                        setTextColor(AppColors.muted)
-                    })
-                    // If RamayanaActivity exists on device build, user can wire intent;
-                    // placeholder keeps shell complete.
-                })
-            } catch (e: Exception) {
-                content.addView(TextView(this@ShellActivity).apply {
-                    text = "Error: ${e.message}"
-                    setTextColor(AppColors.vermilion)
+            })
+        }
+
+        try {
+            homeVedaSummaries = vedaRepo.getVedaSummaries()
+        } catch (e: Exception) {
+            homeVedaSummaries = emptyList()
+        }
+
+        val grid = GridLayout(this).apply {
+            columnCount = 3
+            useDefaultMargins = false
+        }
+        homeSections.forEachIndexed { index, section ->
+            val enabled = section.action != HomeAction.Soon
+            val tile = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setBackgroundColor(AppColors.surface)
+                setPadding(dp(8), dp(16), dp(8), dp(16))
+                alpha = if (enabled) 1f else 0.4f
+                setOnClickListener { onHomeSectionTap(section) }
+            }
+            tile.addView(TextView(this).apply {
+                text = section.icon
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
+                gravity = Gravity.CENTER
+            })
+            tile.addView(TextView(this).apply {
+                text = section.label
+                setTextColor(if (enabled) AppColors.ivory else AppColors.muted)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                gravity = Gravity.CENTER
+                setPadding(0, dp(6), 0, 0)
+            })
+            if (!enabled) {
+                tile.addView(TextView(this).apply {
+                    text = "শীঘ্রই"
+                    setTextColor(AppColors.muted)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
+                    gravity = Gravity.CENTER
                 })
             }
+            val params = GridLayout.LayoutParams().apply {
+                width = 0
+                height = GridLayout.LayoutParams.WRAP_CONTENT
+                columnSpec = GridLayout.spec(index % 3, 1f)
+                rowSpec = GridLayout.spec(index / 3)
+                setMargins(dp(4), dp(4), dp(4), dp(4))
+            }
+            grid.addView(tile, params)
         }
+        content.addView(grid)
+    }
+
+    private fun onHomeSectionTap(section: HomeSection) {
+        when (section.action) {
+            HomeAction.Vedas -> openVedaPicker()
+            HomeAction.Ramayana -> startActivity(Intent(this, RamayanaActivity::class.java))
+            HomeAction.Mahabharata -> startActivity(Intent(this, MahabharataActivity::class.java))
+            HomeAction.Library -> show(Tab.LIBRARY)
+            HomeAction.Soon ->
+                Toast.makeText(this, "${section.label} শীঘ্রই আসছে", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun openVedaPicker() {
+        if (homeVedaSummaries.isEmpty()) return
+        val names = homeVedaSummaries.map {
+            when (it.code.lowercase()) {
+                "rigveda" -> "ঋগ্বেদ"
+                "yajurveda" -> "যজুর্বেদ"
+                "samaveda" -> "সামবেদ"
+                "atharvaveda" -> "অথর্ববেদ"
+                else -> it.name
+            }
+        }.toTypedArray()
+        AlertDialog.Builder(this)
+            .setTitle("বেদ নির্বাচন করুন")
+            .setItems(names) { _, which ->
+                startActivity(
+                    Intent(this, ReaderActivity::class.java)
+                        .putExtra(ReaderActivity.EXTRA_VEDA_ID, homeVedaSummaries[which].id)
+                )
+            }
+            .show()
     }
 
     private fun renderLibrary() {
