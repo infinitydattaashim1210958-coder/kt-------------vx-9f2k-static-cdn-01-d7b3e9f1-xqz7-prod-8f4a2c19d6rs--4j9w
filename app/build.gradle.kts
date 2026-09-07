@@ -4,6 +4,11 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val localProps = java.util.Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.kyronix.swadhyaa"
     compileSdk = 34
@@ -14,6 +19,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "GEMINI_API_KEY", "\"${localProps.getProperty("gemini_api_key", "")}\"")
     }
 
     flavorDimensions += "env"
