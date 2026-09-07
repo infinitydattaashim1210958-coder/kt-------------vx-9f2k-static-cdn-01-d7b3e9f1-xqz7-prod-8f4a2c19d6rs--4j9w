@@ -46,6 +46,14 @@ class ReaderActivity : AppCompatActivity() {
         private val GOLD get() = AppColors.gold
         private val SAFFRON get() = AppColors.saffron
         private val MUTED get() = AppColors.muted
+
+        // Roboto (Android's default typeface) has no glyphs for Vedic
+        // accent marks (udātta/anudātta, U+0951–U+0952 and the Vedic
+        // Extensions block). Noto Serif Devanagari does, and ships on
+        // essentially all real Android devices — same font family the
+        // old web app requested via CSS font-family. Falls back to the
+        // system default automatically if a device genuinely lacks it.
+        private val DEVANAGARI = Typeface.create("Noto Serif Devanagari", Typeface.NORMAL)
     }
 
     private val vedaId by lazy { intent.getIntExtra(EXTRA_VEDA_ID, 1) }
@@ -137,6 +145,7 @@ class ReaderActivity : AppCompatActivity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             gravity = Gravity.CENTER
             setLineSpacing(0f, 1.35f)
+            typeface = DEVANAGARI
             text = "…"
         }
         metaText = TextView(this).apply {
