@@ -35,5 +35,6 @@ android {
 }
 
 dependencies {
-    // your Room, Hilt, etc. dependencies here
+    // ... existing deps ...
+    implementation("com.google.android.material:material:1.12.0")
 }
