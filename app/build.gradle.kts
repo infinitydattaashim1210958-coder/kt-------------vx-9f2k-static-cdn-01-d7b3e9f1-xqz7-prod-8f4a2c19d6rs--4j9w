@@ -1,12 +1,15 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
 }
 
-val localProps = java.util.Properties().apply {
+val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
+    if (f.exists()) FileInputStream(f).use { load(it) }
 }
 
 android {
