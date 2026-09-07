@@ -63,6 +63,9 @@ jobs:
           test -f app/src/main/assets/databases/ramayana_core.db
           echo "Assets present"
 
+      - name: Write local.properties
+        run: echo "gemini_api_key=${{ secrets.GEMINI_API_KEY }}" >> local.properties
+
       # ── Flavor-qualified task names: "dev" is the side-load flavor
       # (com.kyronix.swadhyaa.dev) actively used for testing against the
       # still-installed legacy app. CI builds/tests this flavor by default.
