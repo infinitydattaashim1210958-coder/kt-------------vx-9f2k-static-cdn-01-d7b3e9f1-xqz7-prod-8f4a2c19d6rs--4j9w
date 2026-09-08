@@ -11,7 +11,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.kyronix.swadhyaa.data.local.CoreDatabase
@@ -284,7 +283,17 @@ class ShellActivity : AppCompatActivity() {
 
     private fun onHomeSectionTap(section: HomeSection) {
         when (section.action) {
-            HomeAction.Vedas -> openVedaPicker()
+            HomeAction.Vedas -> {
+                // Go directly to the reader — Rigveda by default, or last
+                // loaded summary if available. The reader's own veda chips
+                // (Rigveda / Yajurveda / Samaveda / Atharvaveda) let the
+                // user switch vedas once inside, so no home-screen picker needed.
+                val vedaId = homeVedaSummaries.firstOrNull()?.id ?: 1
+                startActivity(
+                    Intent(this, ReaderActivity::class.java)
+                        .putExtra(ReaderActivity.EXTRA_VEDA_ID, vedaId)
+                )
+            }
             HomeAction.Ramayana -> startActivity(Intent(this, RamayanaActivity::class.java))
             HomeAction.Mahabharata -> startActivity(Intent(this, MahabharataActivity::class.java))
             HomeAction.Library -> show(Tab.LIBRARY)
@@ -293,27 +302,6 @@ class ShellActivity : AppCompatActivity() {
         }
     }
 
-    private fun openVedaPicker() {
-        if (homeVedaSummaries.isEmpty()) return
-        val names = homeVedaSummaries.map {
-            when (it.code.lowercase()) {
-                "rigveda" -> "ঋগ্বেদ"
-                "yajurveda" -> "যজুর্বেদ"
-                "samaveda" -> "সামবেদ"
-                "atharvaveda" -> "অথর্ববেদ"
-                else -> it.name
-            }
-        }.toTypedArray()
-        AlertDialog.Builder(this)
-            .setTitle("বেদ নির্বাচন করুন")
-            .setItems(names) { _, which ->
-                startActivity(
-                    Intent(this, ReaderActivity::class.java)
-                        .putExtra(ReaderActivity.EXTRA_VEDA_ID, homeVedaSummaries[which].id)
-                )
-            }
-            .show()
-    }
 
     private fun renderLibrary() {
         content.addView(title("লাইব্রেরি"))
