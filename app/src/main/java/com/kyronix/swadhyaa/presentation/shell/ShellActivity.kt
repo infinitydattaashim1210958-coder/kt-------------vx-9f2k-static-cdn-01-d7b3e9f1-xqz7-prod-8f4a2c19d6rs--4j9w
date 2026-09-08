@@ -2,6 +2,7 @@ package com.kyronix.swadhyaa.presentation.shell
 
 import android.content.Intent
 import android.graphics.Typeface
+import android.net.Uri
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
@@ -19,6 +20,11 @@ import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.data.prefs.UserPrefs
 import com.kyronix.swadhyaa.data.repository.SearchRepository
 import com.kyronix.swadhyaa.data.repository.VedaRepository
+import com.kyronix.swadhyaa.data.repository.LibraryRepository
+import com.kyronix.swadhyaa.data.repository.LibraryBookInfo
+import com.kyronix.swadhyaa.data.repository.LibraryBookStatus
+import com.kyronix.swadhyaa.data.repository.LibraryBookWithStatus
+import com.kyronix.swadhyaa.presentation.library.LibraryDbBookReaderActivity
 import com.kyronix.swadhyaa.domain.model.VedaSummary
 import com.kyronix.swadhyaa.presentation.mahabharata.MahabharataActivity
 import com.kyronix.swadhyaa.presentation.ramayana.RamayanaActivity
@@ -303,60 +309,125 @@ class ShellActivity : AppCompatActivity() {
     }
 
 
-    private fun renderLibrary() {
-        content.addView(title("লাইব্রেরি"))
-        content.addView(subtitle("Vedas · Itihāsa"))
+    // Tracks the in-flight library catalog load so it can be cancelled
+    // if the user switches tabs before the network response arrives.
+    private var libraryJob: Job? = null
 
-        // Digital Library (downloadable HTML/db.gz commentary books, e.g.
-        // গোপালন/গুরুগিরি) is a distinct feature from the Veda/Ramayana
-        // shortcuts below — kept as its own screen (LibraryActivity) rather
-        // than folded into this one, since the two have unrelated data
-        // models (LibraryRepository vs. VedaRepository) and this tab's
-        // existing shortcuts already work and shouldn't be disturbed.
-        content.addView(card {
-            addView(TextView(this@ShellActivity).apply {
-                text = "ডিজিটাল লাইব্রেরি"
-                setTextColor(AppColors.saffron)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
-                typeface = Typeface.DEFAULT_BOLD
-            })
-            addView(TextView(this@ShellActivity).apply {
-                text = "ডাউনলোডযোগ্য বই ও গ্রন্থ"
+    private fun renderLibrary() {
+        libraryJob?.cancel()
+
+        content.addView(title("লাইব্রেরি"))
+        content.addView(subtitle("ডাউনলোডযোগ্য বই ও গ্রন্থ"))
+
+        val loadingText = TextView(this).apply {
+            text = "লোড হচ্ছে…"
+            setTextColor(AppColors.muted)
+            setPadding(0, dp(12), 0, 0)
+        }
+        content.addView(loadingText)
+
+        libraryJob = lifecycleScope.launch {
+            val result = LibraryRepository.getCatalog(this@ShellActivity)
+
+            content.removeView(loadingText)
+
+            result.onFailure { err ->
+                content.addView(TextView(this@ShellActivity).apply {
+                    text = err.message ?: "বইয়ের তালিকা পাওয়া যায়নি"
+                    setTextColor(AppColors.vermilion)
+                    setPadding(0, dp(12), 0, 0)
+                })
+                return@launch
+            }
+
+            val books = result.getOrThrow()
+                .sortedWith(compareBy { it.info.title })
+
+            content.addView(TextView(this@ShellActivity).apply {
+                text = "${books.size}টা বই"
                 setTextColor(AppColors.muted)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setPadding(0, 0, 0, dp(8))
             })
-            setOnClickListener {
-                startActivity(Intent(this@ShellActivity, com.kyronix.swadhyaa.presentation.library.LibraryActivity::class.java))
-            }
-        })
 
-        lifecycleScope.launch {
-            vedaRepo.getVedaSummaries().forEach { v ->
-                content.addView(card {
-                    addView(TextView(this@ShellActivity).apply {
-                        text = v.name
-                        setTextColor(AppColors.ivory)
-                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                    })
-                    addView(TextView(this@ShellActivity).apply {
-                        text = "${v.mantraCount} mantras"
-                        setTextColor(AppColors.muted)
-                    })
-                    setOnClickListener {
-                        startActivity(
-                            Intent(this@ShellActivity, ReaderActivity::class.java)
-                                .putExtra(ReaderActivity.EXTRA_VEDA_ID, v.id)
-                        )
-                    }
-                })
-            }
-            content.addView(card {
-                addView(TextView(this@ShellActivity).apply {
-                    text = "রামায়ণ (৬ কাণ্ড)"
-                    setTextColor(AppColors.ivory)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-                })
+            books.forEach { bws -> renderLibraryBookCard(bws) }
+        }
+    }
+
+    private fun renderLibraryBookCard(bws: LibraryBookWithStatus) {
+        val book = bws.info
+        val downloaded = bws.status == LibraryBookStatus.DOWNLOADED
+
+        content.addView(card {
+            addView(TextView(this@ShellActivity).apply {
+                text = book.title
+                setTextColor(AppColors.ivory)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+                setPadding(0, 0, 0, dp(10))
             })
+
+            val btnRow = LinearLayout(this@ShellActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+            }
+
+            val progressText = TextView(this@ShellActivity).apply {
+                text = ""
+                setTextColor(AppColors.muted)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setPadding(dp(12), dp(8), 0, 0)
+            }
+
+            val actionBtn = TextView(this@ShellActivity).apply {
+                text = if (downloaded) "পড়ুন" else "ডাউনলোড"
+                setTextColor(AppColors.bg)
+                setBackgroundColor(AppColors.gold)
+                setPadding(dp(18), dp(8), dp(18), dp(8))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            }
+
+            actionBtn.setOnClickListener {
+                if (downloaded) {
+                    openLibraryBook(book)
+                } else {
+                    actionBtn.isEnabled = false
+                    actionBtn.text = "শুরু হচ্ছে…"
+                    lifecycleScope.launch {
+                        LibraryRepository.download(this@ShellActivity, book) { msg ->
+                            runOnUiThread { progressText.text = msg }
+                        }.onSuccess {
+                            show(Tab.LIBRARY)
+                        }.onFailure { err ->
+                            runOnUiThread {
+                                actionBtn.isEnabled = true
+                                actionBtn.text = "ডাউনলোড"
+                                progressText.text = "ব্যর্থ: ${err.message}"
+                            }
+                        }
+                    }
+                }
+            }
+
+            btnRow.addView(actionBtn)
+            btnRow.addView(progressText)
+            addView(btnRow)
+        })
+    }
+
+    private fun openLibraryBook(book: LibraryBookInfo) {
+        when (book.type) {
+            "db" -> startActivity(
+                Intent(this, LibraryDbBookReaderActivity::class.java)
+                    .putExtra(LibraryDbBookReaderActivity.EXTRA_BOOK_ID, book.id)
+                    .putExtra(LibraryDbBookReaderActivity.EXTRA_BOOK_TITLE, book.title)
+            )
+            else -> lifecycleScope.launch {
+                val uri = LibraryRepository.getHtmlShareableUri(this@ShellActivity, book)
+                if (uri != null) {
+                    startActivity(Intent(Intent.ACTION_VIEW, uri))
+                } else {
+                    Toast.makeText(this@ShellActivity, "ফাইল খোলা যাচ্ছে না", Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 
