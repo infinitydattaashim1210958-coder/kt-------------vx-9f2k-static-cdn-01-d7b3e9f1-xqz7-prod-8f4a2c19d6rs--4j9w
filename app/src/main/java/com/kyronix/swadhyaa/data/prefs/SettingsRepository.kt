@@ -38,6 +38,8 @@ import kotlinx.coroutines.flow.map
 data class ReaderSettings(
     val fontSize: Int = 18,
     val fontFamily: String = "default",
+    val banglaFont: String = "system",
+    val devanagariFont: String = "noto_serif_devanagari",
     val theme: String = "auto",
     val accentTheme: String = "gold",
     val lineHeight: String = "normal",
@@ -54,6 +56,8 @@ class SettingsRepository(private val context: Context) {
     private object Keys {
         val fontSize = intPreferencesKey("setting_fontSize")
         val fontFamily = stringPreferencesKey("setting_fontFamily")
+        val banglaFont = stringPreferencesKey("setting_banglaFont")
+        val devanagariFont = stringPreferencesKey("setting_devanagariFont")
         val theme = stringPreferencesKey("setting_theme")
         val accentTheme = stringPreferencesKey("setting_accentTheme")
         val lineHeight = stringPreferencesKey("setting_lineHeight")
@@ -70,6 +74,8 @@ class SettingsRepository(private val context: Context) {
         ReaderSettings(
             fontSize = prefs[Keys.fontSize] ?: defaults.fontSize,
             fontFamily = prefs[Keys.fontFamily] ?: defaults.fontFamily,
+            banglaFont = prefs[Keys.banglaFont] ?: defaults.banglaFont,
+            devanagariFont = prefs[Keys.devanagariFont] ?: defaults.devanagariFont,
             theme = prefs[Keys.theme] ?: defaults.theme,
             accentTheme = prefs[Keys.accentTheme] ?: defaults.accentTheme,
             lineHeight = prefs[Keys.lineHeight] ?: defaults.lineHeight,
@@ -90,6 +96,8 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setFontSize(v: Int) = applyFull(readOnce().copy(fontSize = v))
     suspend fun setFontFamily(v: String) = applyFull(readOnce().copy(fontFamily = v))
+    suspend fun setBanglaFont(v: String) = applyFull(readOnce().copy(banglaFont = v))
+    suspend fun setDevanagariFont(v: String) = applyFull(readOnce().copy(devanagariFont = v))
     suspend fun setTheme(v: String) = applyFull(readOnce().copy(theme = v))
     suspend fun setAccentTheme(v: String) = applyFull(readOnce().copy(accentTheme = v))
     suspend fun setLineHeight(v: String) = applyFull(readOnce().copy(lineHeight = v))
@@ -116,6 +124,8 @@ class SettingsRepository(private val context: Context) {
         context.dataStore.edit { prefs ->
             prefs[Keys.fontSize] = s.fontSize
             prefs[Keys.fontFamily] = s.fontFamily
+            prefs[Keys.banglaFont] = s.banglaFont
+            prefs[Keys.devanagariFont] = s.devanagariFont
             prefs[Keys.theme] = s.theme
             prefs[Keys.accentTheme] = s.accentTheme
             prefs[Keys.lineHeight] = s.lineHeight
