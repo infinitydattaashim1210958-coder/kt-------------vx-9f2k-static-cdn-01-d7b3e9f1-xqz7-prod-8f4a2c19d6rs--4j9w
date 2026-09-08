@@ -35,6 +35,14 @@
             android:name=".presentation.library.LibraryDbBookReaderActivity"
             android:exported="false"
             android:theme="@style/Theme.Swadhyay" />
+        <activity
+            android:name=".presentation.ramayana.RamayanaActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Swadhyay" />
+        <activity
+            android:name=".presentation.mahabharata.MahabharataActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Swadhyay" />
 
         <!--
           Needed to open a downloaded library HTML book via ACTION_VIEW in
