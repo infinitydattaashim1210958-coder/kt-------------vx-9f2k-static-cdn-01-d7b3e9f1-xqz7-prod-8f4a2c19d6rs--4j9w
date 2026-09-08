@@ -30,6 +30,7 @@ import com.kyronix.swadhyaa.presentation.mahabharata.MahabharataActivity
 import com.kyronix.swadhyaa.presentation.ramayana.RamayanaActivity
 import com.kyronix.swadhyaa.presentation.reader.ReaderActivity
 import com.kyronix.swadhyaa.ui.theme.AppColors
+import com.kyronix.swadhyaa.ui.theme.FontManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -671,8 +672,81 @@ class ShellActivity : AppCompatActivity() {
                 addView(row)
             })
 
-            // ── Toggles ────────────────────────────────────────────────
+            // ── বাংলা ফন্ট পিকার ───────────────────────────────────────
             content.addView(card {
+                addView(TextView(this@ShellActivity).apply {
+                    text = "বাংলা ফন্ট"
+                    setTextColor(AppColors.ivory)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    typeface = Typeface.DEFAULT_BOLD
+                    setPadding(0, 0, 0, dp(10))
+                })
+                val col = LinearLayout(this@ShellActivity).apply { orientation = LinearLayout.VERTICAL }
+                FontManager.BANGLA_FONTS.forEach { entry ->
+                    val isSelected = entry.id == settings.banglaFont
+                    col.addView(TextView(this@ShellActivity).apply {
+                        text = (if (isSelected) "● " else "○ ") + entry.displayName
+                        setTextColor(if (isSelected) AppColors.goldBright else AppColors.muted)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                        if (entry.id != "system") typeface = entry.typeface(this@ShellActivity)
+                        setPadding(dp(4), dp(6), dp(4), dp(6))
+                        setOnClickListener {
+                            lifecycleScope.launch {
+                                settingsRepo.setBanglaFont(entry.id)
+                                show(Tab.SETTINGS)
+                            }
+                        }
+                    })
+                }
+                addView(col)
+            })
+
+            // ── সংস্কৃত / দেবনাগরী ফন্ট পিকার ────────────────────────
+            content.addView(card {
+                addView(TextView(this@ShellActivity).apply {
+                    text = "সংস্কৃত ফন্ট (মন্ত্র)"
+                    setTextColor(AppColors.ivory)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                    typeface = Typeface.DEFAULT_BOLD
+                    setPadding(0, 0, 0, dp(10))
+                })
+                addView(TextView(this@ShellActivity).apply {
+                    text = "উদাত্ত-অনুদাত্ত স্বরচিহ্নের জন্য Noto Serif/Sans বা Tiro Sanskrit ব্যবহার করুন।"
+                    setTextColor(AppColors.muted)
+                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                    setPadding(0, 0, 0, dp(8))
+                })
+                val col = LinearLayout(this@ShellActivity).apply { orientation = LinearLayout.VERTICAL }
+                FontManager.DEVANAGARI_FONTS.forEach { entry ->
+                    val isSelected = entry.id == settings.devanagariFont
+                    col.addView(TextView(this@ShellActivity).apply {
+                        text = (if (isSelected) "● " else "○ ") + entry.displayName
+                        // Preview the font with a short Sanskrit sample
+                        val preview = TextView(this@ShellActivity).apply {
+                            text = "  अ॒ग्निमी॑ळे"
+                            setTextColor(AppColors.saffron)
+                            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                            if (entry.id != "system") typeface = entry.typeface(this@ShellActivity)
+                        }
+                        setTextColor(if (isSelected) AppColors.goldBright else AppColors.muted)
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                        setPadding(dp(4), dp(6), dp(4), dp(6))
+                        val row = LinearLayout(this@ShellActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+                        row.addView(this)
+                        row.addView(preview)
+                        row.setOnClickListener {
+                            lifecycleScope.launch {
+                                settingsRepo.setDevanagariFont(entry.id)
+                                show(Tab.SETTINGS)
+                            }
+                        }
+                        col.addView(row)
+                    })
+                }
+                addView(col)
+            })
+
+            // ── Toggles ────────────────────────────────────────────────            content.addView(card {
                 addView(toggleRow("লেখা জাস্টিফাই করুন", settings.justifyText) { checked ->
                     lifecycleScope.launch { settingsRepo.setJustifyText(checked) }
                 })
