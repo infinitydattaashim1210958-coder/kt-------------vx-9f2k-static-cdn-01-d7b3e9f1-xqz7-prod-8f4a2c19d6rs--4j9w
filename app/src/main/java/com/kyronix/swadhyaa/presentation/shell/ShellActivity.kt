@@ -746,7 +746,8 @@ class ShellActivity : AppCompatActivity() {
                 addView(col)
             })
 
-            // ── Toggles ────────────────────────────────────────────────            content.addView(card {
+            // ── Toggles ────────────────────────────────────────────────
+            content.addView(card {
                 addView(toggleRow("লেখা জাস্টিফাই করুন", settings.justifyText) { checked ->
                     lifecycleScope.launch { settingsRepo.setJustifyText(checked) }
                 })
