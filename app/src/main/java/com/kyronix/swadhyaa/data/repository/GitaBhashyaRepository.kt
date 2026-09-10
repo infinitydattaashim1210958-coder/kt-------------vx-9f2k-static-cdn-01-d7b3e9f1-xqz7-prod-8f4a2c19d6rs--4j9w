@@ -1,6 +1,7 @@
 package com.kyronix.swadhyaa.data.repository
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import com.kyronix.swadhyaa.data.remote.PackDownloadManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,13 +17,21 @@ import kotlinx.coroutines.withContext
  * open via [PackDownloadManager], plain `rawQuery`, never merged into
  * [com.kyronix.swadhyaa.data.local.MasterDatabase].
  *
- * SCHEMA ASSUMPTION — see [GitaManifest]'s doc comment for why. If a pack 404s
- * against [TABLE]/its columns, call [inspectSchema] against that pack to get
- * its real table/column names back instead of guessing again.
+ * SCHEMA STATUS (2026-09-11): [TABLE]'s name below is UNCONFIRMED — the sibling
+ * assumption for the base-text pack (`shlokas`, in [GitaCoreTextRepository])
+ * already turned out wrong (`Error: no such table: shlokas`), so treat this
+ * one the same way until proven otherwise. Every query is wrapped by
+ * [withPack] so a wrong table/column name doesn't just fail — the exception
+ * message gets the pack's real tables/columns appended
+ * ([GitaCoreTextRepository.dumpSchema]), and that message is exactly what
+ * already reaches the screen via `GitaUiState.bhashyaError`. Fix [TABLE] and
+ * the column names once a real bhashya pack's schema shows up there.
  */
 object GitaBhashyaRepository {
 
     private const val FOLDER = "gita_bhasya"
+
+    // ⚠ UNCONFIRMED — see class doc comment.
     private const val TABLE = "gita_bhashyas"
 
     fun isDownloaded(context: Context, scholar: GitaScholarInfo): Boolean =
@@ -40,7 +49,9 @@ object GitaBhashyaRepository {
     /**
      * Reads [scholar]'s field(s) for verse (adhyaya, shloka). Returns an empty
      * list (not a failure) if this scholar simply has no entry for this verse;
-     * [Result.failure] only for a real I/O/download/schema error.
+     * [Result.failure] for a real I/O/download/schema error — and per the class
+     * doc comment, a schema error's message already tells you what's really
+     * in the pack instead of leaving you to guess again.
      */
     suspend fun getBhashya(
         context: Context,
@@ -48,47 +59,43 @@ object GitaBhashyaRepository {
         adhyaya: Int,
         shloka: Int
     ): Result<List<BhashyaField>> = withContext(Dispatchers.IO) {
-        PackDownloadManager.openPack(context, FOLDER, scholar.packFile).mapCatching { sqlite ->
-            sqlite.use { database ->
-                val cursor = database.rawQuery(
-                    "SELECT field_key, value FROM $TABLE WHERE adhyaya = ? AND shloka = ?",
-                    arrayOf(adhyaya.toString(), shloka.toString())
-                )
-                val raw = mutableMapOf<String, String>()
-                cursor.use {
-                    while (it.moveToNext()) raw[it.getString(0)] = it.getString(1)
-                }
-                // Only THIS row's fields, in its declared order — a pack shared
-                // with other rows (e.g. sankar_et_ht_sc) never leaks another
-                // row's language/field into this one.
-                scholar.fields.mapNotNull { f ->
-                    raw[f.key]?.let { value -> BhashyaField(f.label, value) }
-                }
+        withPack(context, scholar) { database ->
+            val cursor = database.rawQuery(
+                "SELECT field_key, value FROM $TABLE WHERE adhyaya = ? AND shloka = ?",
+                arrayOf(adhyaya.toString(), shloka.toString())
+            )
+            val raw = mutableMapOf<String, String>()
+            cursor.use {
+                while (it.moveToNext()) raw[it.getString(0)] = it.getString(1)
+            }
+            // Only THIS row's fields, in its declared order — a pack shared
+            // with other rows (e.g. sankar_et_ht_sc) never leaks another
+            // row's language/field into this one.
+            scholar.fields.mapNotNull { f ->
+                raw[f.key]?.let { value -> BhashyaField(f.label, value) }
             }
         }
     }
 
     /**
-     * Diagnostic only — not used by the normal read path. Call against a pack
-     * that returns an empty/failed [getBhashya] unexpectedly, to see what
-     * tables/columns it actually has instead of guessing blind.
+     * Opens [scholar]'s pack and runs [block]; on ANY exception, re-throws
+     * with the pack's real schema appended (via [GitaCoreTextRepository.dumpSchema],
+     * shared rather than duplicated since the diagnostic logic is identical).
      */
-    suspend fun inspectSchema(context: Context, scholar: GitaScholarInfo): Result<String> =
-        withContext(Dispatchers.IO) {
-            PackDownloadManager.openPack(context, FOLDER, scholar.packFile).mapCatching { sqlite ->
-                sqlite.use { database ->
-                    val tables = mutableListOf<String>()
-                    database.rawQuery(
-                        "SELECT name FROM sqlite_master WHERE type = 'table'", null
-                    ).use { c -> while (c.moveToNext()) tables.add(c.getString(0)) }
-
-                    tables.joinToString("\n\n") { table ->
-                        val cols = mutableListOf<String>()
-                        database.rawQuery("PRAGMA table_info($table)", null).use { c ->
-                            while (c.moveToNext()) cols.add(c.getString(1)) // column 1 = name
-                        }
-                        "$table(${cols.joinToString(", ")})"
-                    }
+    private suspend fun <T> withPack(
+        context: Context,
+        scholar: GitaScholarInfo,
+        block: (SQLiteDatabase) -> T
+    ): Result<T> =
+        PackDownloadManager.openPack(context, FOLDER, scholar.packFile).mapCatching { sqlite ->
+            sqlite.use { database ->
+                try {
+                    block(database)
+                } catch (e: Exception) {
+                    throw IllegalStateException(
+                        "${e.message}\n\n--- ${scholar.packFile} এর প্রকৃত schema ---\n" +
+                            GitaCoreTextRepository.dumpSchema(database), e
+                    )
                 }
             }
         }
