@@ -160,7 +160,7 @@ class ShellActivity : AppCompatActivity() {
         setPadding(0, 0, 0, dp(16))
     }
 
-    private fun card(block: LinearLayout.() -> Unit): LinearLayout {
+    private inline fun card(block: LinearLayout.() -> Unit): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(AppColors.surface)
