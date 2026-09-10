@@ -190,6 +190,24 @@ class ReaderViewModel(
         }
     }
 
+    /**
+     * FIX (2026-09-11): previously always reset `selectedScholar = null` here,
+     * so moving to the next/prev mantra dropped back to the bare scholar list
+     * even if you had a bhashya open — reported as a UX bug ("আগের মন্ত্রে যে
+     * ভাষ্যটা পড়ছিলাম পরের মন্ত্রে সেটা opened অবস্থায় থাকা উচিত").
+     *
+     * Now the previously-selected scholar is looked up by id in the NEW
+     * mantra's scholar list and, if still present, stays selected AND its
+     * content is re-fetched for the new mantra — "still open" means still
+     * showing text, not just still highlighted.
+     *
+     * A scholar can legitimately disappear here (unlike Gita's static list —
+     * see GitaViewModel.applyVerse's doc comment) because Veda scholars are
+     * filtered by `bhashya_presence` per mantra: if the carried-over scholar
+     * has no entry for the new mantra, `scholars` won't contain their id,
+     * `carried` comes back null, and the UI falls back to the bare list
+     * exactly as before — that part of the old behaviour was correct.
+     */
     private suspend fun applyMantra(m: MantraContent) {
         val l1 = repository.getLevel1List(m.vedaId)
         val l2 = m.level1?.let { repository.getLevel2List(m.vedaId, it) }.orEmpty()
@@ -212,6 +230,10 @@ class ReaderViewModel(
         val newLang = if (prevLang.isNotEmpty() && byLang.containsKey(prevLang)) prevLang
                       else langs.firstOrNull() ?: ""
 
+        // Carry the open scholar forward if the new mantra still has them.
+        val prevScholarId = _state.value.selectedScholar?.id
+        val carried = prevScholarId?.let { pid -> scholars.find { it.id == pid } }
+
         _state.value = _state.value.copy(
             loading = false, error = null, jumpError = null,
             current = m,
@@ -219,11 +241,15 @@ class ReaderViewModel(
             scholarsByLang = byLang,
             availableLanguages = langs,
             selectedLanguage = newLang,
-            selectedScholar = null,
+            selectedScholar = carried,
             bhashyaContent = emptyList(),
             bhashyaError = null,
             scholarDownloadStatus = dlStatus
         )
+
+        if (carried != null && dlStatus[carried.id ?: -1] == true) {
+            loadBhashyaContent(carried, m.id)
+        }
     }
 
     class Factory(
