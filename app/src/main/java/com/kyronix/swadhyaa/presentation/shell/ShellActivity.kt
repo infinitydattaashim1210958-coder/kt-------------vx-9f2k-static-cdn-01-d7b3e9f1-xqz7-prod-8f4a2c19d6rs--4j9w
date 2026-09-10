@@ -631,7 +631,7 @@ class ShellActivity : AppCompatActivity() {
                 "contact"           -> renderStaticPage("যোগাযোগ করুন", "ওয়েবসাইট: arsa-siddanto.blogspot.com\n\nডেভেলপার: Ashim Datta\nFounder & CEO, Kyronix Innovation Group (KIG)\n\nবাগ রিপোর্ট ও ফিডব্যাকের জন্য নিচের বিকল্পগুলো ব্যবহার করুন।")
                 "feedback"          -> renderFeedbackForm()
                 "bug_report"        -> renderBugReportForm()
-                "faq"               -> renderStaticPage("সাহায্য ও প্রশ্নোত্তর", "প্র: ভাষ্য কোথায় পাবো?\nউ: রিডারে মন্ত্র দেখার সময় নিচে ভাষা ট্যাব থেকে ভাষ্য ডাউনলোড করুন।\n\nপ্র: অ্যাপ কি অফলাইনে কাজ করে?\nউ: হ্যাঁ। মূল ডেটাবেজ অ্যাপের সাথেই থাকে। শুধু ভাষ্য ও লাইব্রেরি ডাউনলোডের জন্য ইন্টারনেট দরকার।\n\nপ্র: বুকমার্ক কীভাবে করবো?\nউ: রিডারে "বুকমার্ক" বাটন চাপুন।")
+                "faq"               -> renderStaticPage("সাহায্য ও প্রশ্নোত্তর", "প্র: ভাষ্য কোথায় পাবো?\nউ: রিডারে মন্ত্র দেখার সময় নিচে ভাষা ট্যাব থেকে ভাষ্য ডাউনলোড করুন।\n\nপ্র: অ্যাপ কি অফলাইনে কাজ করে?\nউ: হ্যাঁ। মূল ডেটাবেজ অ্যাপের সাথেই থাকে। শুধু ভাষ্য ও লাইব্রেরি ডাউনলোডের জন্য ইন্টারনেট দরকার।\n\nপ্র: বুকমার্ক কীভাবে করবো?\nউ: রিডারে \"বুকমার্ক\" বাটন চাপুন।")
                 "about"             -> renderAbout()
             }
         }
@@ -1132,8 +1132,7 @@ class ShellActivity : AppCompatActivity() {
         settingsSubHeader(heading)
         content.addView(card {
             addView(TextView(this@ShellActivity).apply {
-                text = body.replace("\\n", "
-")
+                text = body.replace("\\n", "\n")
                 setTextColor(AppColors.ivory); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f); setLineSpacing(0f, 1.5f)
             })
         })
@@ -1189,13 +1188,11 @@ class ShellActivity : AppCompatActivity() {
         content.addView(card {
             addView(TextView(this@ShellActivity).apply { text = "About"; setTextColor(AppColors.gold); setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f); typeface = Typeface.DEFAULT_BOLD; setPadding(0, 0, 0, dp(8)) })
             addView(TextView(this@ShellActivity).apply {
-                text = "স্বাধ্যায় is a digital platform dedicated to preserving and presenting the timeless knowledge of Vedic literature, Sanskrit scriptures, and the Valmiki Ramayana.
-
-The application combines ancient wisdom with modern technology to create a simple, accessible, and immersive reading experience for students, researchers, and knowledge seekers."
+                text = "স্বাধ্যায় is a digital platform dedicated to preserving and presenting the timeless knowledge of Vedic literature, Sanskrit scriptures, and the Valmiki Ramayana.\n\nThe application combines ancient wisdom with modern technology to create a simple, accessible, and immersive reading experience for students, researchers, and knowledge seekers."
                 setTextColor(AppColors.ivory); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f); setLineSpacing(0f, 1.5f); setPadding(0, 0, 0, dp(12))
             })
             addView(TextView(this@ShellActivity).apply {
-                text = ""Knowledge preserved through time becomes wisdom for future generations.""
+                text = "\"Knowledge preserved through time becomes wisdom for future generations.\""
                 setTextColor(AppColors.gold); setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setBackgroundColor(AppColors.elevated); setPadding(dp(12), dp(10), dp(12), dp(10))
             })
@@ -1227,15 +1224,7 @@ The application combines ancient wisdom with modern technology to create a simpl
             })
         })
         content.addView(TextView(this).apply {
-            text = "স্বাধ্যায় v1.0.0 · Build 1
-© Copyright & Preservation
-All rights reserved. This digital work is protected
-and preserved for educational, spiritual and
-research purposes.
-
-Kyronix Innovation Group (KIG)
-Ashim Datta
-Founder & CEO"
+            text = "স্বাধ্যায় v1.0.0 · Build 1\n© Copyright & Preservation\nAll rights reserved. This digital work is protected\nand preserved for educational, spiritual and\nresearch purposes.\n\nKyronix Innovation Group (KIG)\nAshim Datta\nFounder & CEO"
             setTextColor(AppColors.mutedDim); setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f); gravity = Gravity.CENTER; setPadding(0, dp(16), 0, dp(8))
         })
     }
