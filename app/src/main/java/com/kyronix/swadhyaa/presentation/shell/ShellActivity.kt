@@ -29,6 +29,7 @@ import com.kyronix.swadhyaa.data.repository.LibraryBookWithStatus
 import com.kyronix.swadhyaa.presentation.library.LibraryDbBookReaderActivity
 import com.kyronix.swadhyaa.domain.model.VedaSummary
 import com.kyronix.swadhyaa.presentation.mahabharata.MahabharataActivity
+import com.kyronix.swadhyaa.presentation.gita.GitaActivity
 import com.kyronix.swadhyaa.presentation.ramayana.RamayanaActivity
 import com.kyronix.swadhyaa.presentation.reader.ReaderActivity
 import com.kyronix.swadhyaa.ui.theme.AppColors
@@ -184,6 +185,7 @@ class ShellActivity : AppCompatActivity() {
         data object Vedas : HomeAction()
         data object Ramayana : HomeAction()
         data object Mahabharata : HomeAction()
+        data object Gita : HomeAction()
         data object Library : HomeAction()
         data object Soon : HomeAction()
     }
@@ -193,6 +195,7 @@ class ShellActivity : AppCompatActivity() {
         HomeSection("🕉", "বেদ", HomeAction.Vedas),
         HomeSection("🏹", "রামায়ণ", HomeAction.Ramayana),
         HomeSection("⚔️", "মহাভারত", HomeAction.Mahabharata),
+        HomeSection("📿", "শ্রীমদ্ভগবদ্গীতা", HomeAction.Gita),
         HomeSection("📖", "পুরাণ", HomeAction.Soon),
         HomeSection("🔥", "ব্রাহ্মণ", HomeAction.Soon),
         HomeSection("🪔", "উপনিষদ", HomeAction.Soon),
@@ -306,6 +309,7 @@ class ShellActivity : AppCompatActivity() {
             }
             HomeAction.Ramayana -> startActivity(Intent(this, RamayanaActivity::class.java))
             HomeAction.Mahabharata -> startActivity(Intent(this, MahabharataActivity::class.java))
+            HomeAction.Gita -> startActivity(Intent(this, GitaActivity::class.java))
             HomeAction.Library -> show(Tab.LIBRARY)
             HomeAction.Soon ->
                 Toast.makeText(this, "${section.label} শীঘ্রই আসছে", Toast.LENGTH_SHORT).show()
