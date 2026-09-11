@@ -50,8 +50,13 @@ class GitaActivity : AppCompatActivity() {
     private lateinit var translitText: TextView
     private lateinit var statusText: TextView
     private lateinit var langTabRow: LinearLayout
+    // NOTE (fix, 2026-09-11): there used to be a separate `bhashyaPanel`
+    // container placed AFTER this whole list, so tapping a scholar showed
+    // their content below every row instead of under the one you tapped.
+    // Fixed the same way as ReaderActivity: [renderScholarList] now inserts
+    // the selected scholar's content right after their own row, inside this
+    // same container (accordion-style) — there is no separate panel anymore.
     private lateinit var scholarList: LinearLayout
-    private lateinit var bhashyaPanel: LinearLayout
 
     private val density by lazy { resources.displayMetrics.density }
     private fun dp(v: Int) = (v * density).toInt()
@@ -170,9 +175,6 @@ class GitaActivity : AppCompatActivity() {
         }
         readerCol.addView(scholarList)
 
-        bhashyaPanel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        readerCol.addView(bhashyaPanel)
-
         readerCol.addView(sectionDivider())
 
         val nav = LinearLayout(this).apply {
@@ -244,8 +246,7 @@ class GitaActivity : AppCompatActivity() {
 
                     renderJump(s)
                     renderLangTabs(s)
-                    renderScholarList(s)
-                    renderBhashyaPanel(s)
+                    renderScholarList(s) // also renders the selected scholar's content inline now
 
                     prefs.saveContinue(
                         UserPrefs.ContinuePos(
@@ -306,10 +307,30 @@ class GitaActivity : AppCompatActivity() {
         jumpRow.removeAllViews()
         val m = s.current ?: return
         addJump("অধ্যায়", "${m.adhyaya}", s.adhyayaOptions) { vm.jumpAdhyaya(it) }
-        addJump("শ্লোক", "${m.shloka}", s.shlokaOptions) { vm.jumpShloka(it) }
+
+        // Every chapter's pack has one extra "verse" beyond the real last
+        // shloka — the closing colophon ("ॐ तत्सदिति... अध्यायः"), stored as
+        // its own row with verse = lastRealVerse + 1. Showing it as a plain
+        // number confused verse counts, so it's always the highest number in
+        // shlokaOptions (see GitaCoreTextRepository — verses come back
+        // ascending) and gets relabeled "সমাপন" here, both in the picker
+        // list and in the box itself when it's the current selection. The
+        // underlying Int is untouched — jumpShloka still receives the real
+        // verse number either way, only the label shown to the reader changes.
+        val lastShloka = s.shlokaOptions.maxOrNull()
+        val shlokaValue = if (lastShloka != null && m.shloka == lastShloka) "সমাপন" else "${m.shloka}"
+        addJump("শ্লোক", shlokaValue, s.shlokaOptions,
+            labelFor = { v -> if (v == lastShloka) "সমাপন" else v.toString() }
+        ) { vm.jumpShloka(it) }
     }
 
-    private fun addJump(label: String, value: String, options: List<Int>, onPick: (Int) -> Unit) {
+    private fun addJump(
+        label: String,
+        value: String,
+        options: List<Int>,
+        labelFor: (Int) -> String = { it.toString() },
+        onPick: (Int) -> Unit
+    ) {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(SURFACE)
@@ -318,7 +339,7 @@ class GitaActivity : AppCompatActivity() {
                 if (options.isEmpty()) return@setOnClickListener
                 AlertDialog.Builder(this@GitaActivity)
                     .setTitle(label)
-                    .setItems(options.map { it.toString() }.toTypedArray()) { _, i -> onPick(options[i]) }
+                    .setItems(options.map { labelFor(it) }.toTypedArray()) { _, i -> onPick(options[i]) }
                     .show()
             }
         }
@@ -363,7 +384,7 @@ class GitaActivity : AppCompatActivity() {
         }
     }
 
-    // ── Scholar list ──────────────────────────────────────────────────────
+    // ── Scholar list (accordion: content expands inline under its own row) ─
 
     private fun renderScholarList(s: GitaUiState) {
         scholarList.removeAllViews()
@@ -383,23 +404,32 @@ class GitaActivity : AppCompatActivity() {
             }, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(4) })
+
+            // The fix: insert this scholar's content right here, between
+            // their row and the next scholar's row — not after the loop.
+            if (isSelected) {
+                scholarList.addView(buildBhashyaContent(s, scholar))
+            }
         }
     }
 
-    // ── Bhashya panel ─────────────────────────────────────────────────────
+    // ── Bhashya content (built per-scholar, inserted inline above) ─────────
 
-    private fun renderBhashyaPanel(s: GitaUiState) {
-        bhashyaPanel.removeAllViews()
-        val scholar: GitaScholarInfo = s.selectedScholar ?: return
+    private fun buildBhashyaContent(s: GitaUiState, scholar: GitaScholarInfo): LinearLayout {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(12))
+            setBackgroundColor(SURFACE)
+        }.also {
+            it.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(8) }
+        }
+
         val isDownloaded = s.scholarDownloadStatus[scholar.id] == true
 
         if (!isDownloaded) {
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setBackgroundColor(SURFACE)
-                setPadding(dp(16), dp(16), dp(16), dp(16))
-            }
-            card.addView(TextView(this).apply {
+            container.addView(TextView(this).apply {
                 text = "এই ভাষ্য ডাউনলোড করা হয়নি"
                 setTextColor(MUTED)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -407,13 +437,13 @@ class GitaActivity : AppCompatActivity() {
             })
             val progress = s.bhashyaDownloadProgress
             if (progress != null) {
-                card.addView(TextView(this).apply {
+                container.addView(TextView(this).apply {
                     text = "ডাউনলোড হচ্ছে… $progress"
                     setTextColor(GOLD)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 })
             } else {
-                card.addView(TextView(this).apply {
+                container.addView(TextView(this).apply {
                     text = "ডাউনলোড করুন"
                     setTextColor(Color.BLACK)
                     setBackgroundColor(GOLD)
@@ -424,29 +454,28 @@ class GitaActivity : AppCompatActivity() {
                     setOnClickListener { vm.downloadScholar(scholar) }
                 }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             }
-            bhashyaPanel.addView(card)
-            return
+            return container
         }
 
         if (s.bhashyaLoading) {
-            bhashyaPanel.addView(TextView(this).apply {
+            container.addView(TextView(this).apply {
                 text = "ভাষ্য লোড হচ্ছে…"; setTextColor(MUTED)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setPadding(0, dp(8), 0, 0)
             })
-            return
+            return container
         }
 
         if (s.bhashyaError != null) {
-            bhashyaPanel.addView(TextView(this).apply {
+            container.addView(TextView(this).apply {
                 text = s.bhashyaError; setTextColor(VERMILION)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setPadding(0, dp(8), 0, 0)
             })
-            return
+            return container
         }
 
-        // Header: scholar name + confirmed work title (if known) + delete button
+        // Header: work title (now IS scholar.name — see GitaManifest) + delete button
         val headerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -485,27 +514,27 @@ class GitaActivity : AppCompatActivity() {
                     .show()
             }
         })
-        bhashyaPanel.addView(headerRow)
+        container.addView(headerRow)
 
         if (s.bhashyaContent.isEmpty()) {
-            bhashyaPanel.addView(TextView(this).apply {
+            container.addView(TextView(this).apply {
                 text = "এই শ্লোকের জন্য এই ভাষ্যে কিছু পাওয়া যায়নি"
                 setTextColor(MUTED)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setPadding(0, dp(8), 0, 0)
             })
-            return
+            return container
         }
 
         s.bhashyaContent.forEach { field ->
-            bhashyaPanel.addView(TextView(this).apply {
+            container.addView(TextView(this).apply {
                 text = field.label
                 setTextColor(SAFFRON)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 typeface = Typeface.DEFAULT_BOLD
                 setPadding(0, dp(12), 0, dp(4))
             })
-            bhashyaPanel.addView(TextView(this).apply {
+            container.addView(TextView(this).apply {
                 text = field.value
                 setTextColor(IVORY)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
@@ -513,5 +542,6 @@ class GitaActivity : AppCompatActivity() {
                 typeface = banglaTypeface
             })
         }
+        return container
     }
 }
