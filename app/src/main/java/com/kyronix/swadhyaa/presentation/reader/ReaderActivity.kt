@@ -73,8 +73,14 @@ class ReaderActivity : AppCompatActivity() {
     private lateinit var metaText: TextView
     private lateinit var statusText: TextView
     private lateinit var langTabRow: LinearLayout
+    // NOTE (fix, 2026-09-11): there used to be a separate `bhashyaPanel`
+    // container placed AFTER this whole list, so tapping a scholar showed
+    // their content below every row instead of under the one you tapped
+    // (reported bug: "কোনো ভাষ্যতে ক্লিক করলে... দেখাচ্ছে একদম ভাষ্য লিস্টের
+    // নিচে"). Fixed by folding both into one accordion-style list: see
+    // [renderScholarList] — the selected scholar's content is now inserted
+    // right after their own row, inside this same container.
     private lateinit var scholarList: LinearLayout
-    private lateinit var bhashyaPanel: LinearLayout
     private lateinit var btnPrev: Button
     private lateinit var btnNext: Button
 
@@ -197,18 +203,15 @@ class ReaderActivity : AppCompatActivity() {
         langScroll.addView(langTabRow)
         col.addView(langScroll)
 
-        // Scholar list
+        // Scholar list — bhashya content for the selected scholar is inserted
+        // INLINE inside this same container by renderScholarList(), directly
+        // under that scholar's row. There is deliberately no separate panel
+        // container below this one anymore (see field doc comment above).
         scholarList = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 0, 0, dp(8))
         }
         col.addView(scholarList)
-
-        // Bhashya content panel
-        bhashyaPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        col.addView(bhashyaPanel)
 
         col.addView(sectionDivider())
 
@@ -264,8 +267,7 @@ class ReaderActivity : AppCompatActivity() {
                     renderVedaChips(s)
                     renderJump(s)
                     renderLangTabs(s)
-                    renderScholarList(s)
-                    renderBhashyaPanel(s)
+                    renderScholarList(s) // also renders the selected scholar's content inline now
 
                     // Save continue position
                     prefs.saveContinue(
@@ -367,7 +369,7 @@ class ReaderActivity : AppCompatActivity() {
         }
     }
 
-    // ── Scholar list ──────────────────────────────────────────────────────
+    // ── Scholar list (accordion: content expands inline under its own row) ─
 
     private fun renderScholarList(s: ReaderUiState) {
         scholarList.removeAllViews()
@@ -388,26 +390,34 @@ class ReaderActivity : AppCompatActivity() {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(4) })
+
+            // The fix: insert this scholar's content right here, between
+            // their row and the next scholar's row — not after the loop.
+            if (isSelected) {
+                scholarList.addView(buildBhashyaContent(s, scholar))
+            }
         }
     }
 
-    // ── Bhashya panel ─────────────────────────────────────────────────────
+    // ── Bhashya content (built per-scholar, inserted inline above) ─────────
 
-    private fun renderBhashyaPanel(s: ReaderUiState) {
-        bhashyaPanel.removeAllViews()
-        val scholar = s.selectedScholar ?: return
+    private fun buildBhashyaContent(s: ReaderUiState, scholar: ScholarEntity): LinearLayout {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(10), dp(8), dp(10), dp(12))
+            setBackgroundColor(SURFACE)
+        }.also {
+            it.layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(8) }
+        }
+
         val isDownloaded = s.scholarDownloadStatus[scholar.id] == true
 
         if (!isDownloaded) {
-            // Show download card
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setBackgroundColor(SURFACE)
-                setPadding(dp(16), dp(16), dp(16), dp(16))
-            }
             val sizeKb = scholar.packSizeBytes?.let { " (${it / 1024} KB" } ?: ""
             val entries = scholar.entryCount?.let { ", $it এন্ট্রি)" } ?: if (sizeKb.isNotEmpty()) ")" else ""
-            card.addView(TextView(this).apply {
+            container.addView(TextView(this).apply {
                 text = "এই ভাষ্য ডাউনলোড করা হয়নি$sizeKb$entries"
                 setTextColor(MUTED)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -416,7 +426,7 @@ class ReaderActivity : AppCompatActivity() {
 
             val progress = s.downloadProgress
             if (progress != null) {
-                card.addView(TextView(this).apply {
+                container.addView(TextView(this).apply {
                     text = "ডাউনলোড হচ্ছে… $progress"
                     setTextColor(GOLD)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -432,34 +442,33 @@ class ReaderActivity : AppCompatActivity() {
                     typeface = Typeface.DEFAULT_BOLD
                     setOnClickListener { vm.downloadScholar(scholar) }
                 }
-                card.addView(btn, LinearLayout.LayoutParams(
+                container.addView(btn, LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 ))
             }
-            bhashyaPanel.addView(card)
-            return
+            return container
         }
 
         if (s.bhashyaLoading) {
-            bhashyaPanel.addView(TextView(this).apply {
+            container.addView(TextView(this).apply {
                 text = "ভাষ্য লোড হচ্ছে…"; setTextColor(MUTED)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setPadding(0, dp(8), 0, 0)
             })
-            return
+            return container
         }
 
         if (s.bhashyaError != null) {
-            bhashyaPanel.addView(TextView(this).apply {
+            container.addView(TextView(this).apply {
                 text = s.bhashyaError; setTextColor(VERMILION)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setPadding(0, dp(8), 0, 0)
             })
-            return
+            return container
         }
 
-        if (s.bhashyaContent.isEmpty()) return
+        if (s.bhashyaContent.isEmpty()) return container
 
         // Scholar name header + delete button
         val headerRow = LinearLayout(this).apply {
@@ -488,18 +497,18 @@ class ReaderActivity : AppCompatActivity() {
                     .show()
             }
         })
-        bhashyaPanel.addView(headerRow)
+        container.addView(headerRow)
 
         // Field-by-field content
         s.bhashyaContent.forEach { field ->
-            bhashyaPanel.addView(TextView(this).apply {
+            container.addView(TextView(this).apply {
                 text = field.label
                 setTextColor(SAFFRON)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 typeface = Typeface.DEFAULT_BOLD
                 setPadding(0, dp(12), 0, dp(4))
             })
-            bhashyaPanel.addView(TextView(this).apply {
+            container.addView(TextView(this).apply {
                 text = field.value
                 setTextColor(IVORY)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
@@ -507,5 +516,6 @@ class ReaderActivity : AppCompatActivity() {
                 typeface = banglaTypeface
             })
         }
+        return container
     }
 }
