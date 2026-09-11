@@ -7,13 +7,18 @@ import com.kyronix.swadhyaa.data.remote.PackDownloadManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** One verse of the base Gita text. [transliteration] is nullable in case a
- *  given pack row only carries the Devanagari form. */
+/**
+ * One verse of the base Gita text.
+ * [speaker] is a bonus the real schema turned out to carry (see class doc
+ * comment) — who says this verse (কৃষ্ণ/অর্জুন/সঞ্জয়/ধৃতরাষ্ট্র). Null if
+ * the pack row has it blank; not every verse dataset fills this in.
+ */
 data class GitaShloka(
     val adhyaya: Int,
     val shloka: Int,
     val devanagari: String,
-    val transliteration: String?
+    val transliteration: String?,
+    val speaker: String? = null
 )
 
 /**
@@ -24,29 +29,39 @@ data class GitaShloka(
  * scholar's bhashya. [GitaActivity] gates the whole reader on [isDownloaded]
  * before any [GitaBhashyaRepository] entry can be shown against a verse.
  *
- * SCHEMA STATUS (2026-09-11): the original `shlokas(adhyaya, shloka,
- * deva_text, translit_text)` guess was WRONG — confirmed by a live run:
- * `Error: no such table: shlokas`. Rather than guess a second time blind,
- * every query below is wrapped by [withPack] so that on ANY failure — table
- * or column name wrong, doesn't matter which — the real table/column names
- * get appended to the exception message via [dumpSchema]. That message is
- * exactly what [com.kyronix.swadhyaa.presentation.gita.GitaViewModel] already
- * surfaces verbatim in `GitaUiState.error`, and exactly what the reader
- * screen already renders on screen (as seen in the "Error: no such table:
- * shlokas…" screenshot) — so the ACTUAL schema will appear on-screen on the
- * next attempt with no new UI needed. Once that's known, replace [TABLE]
- * and the column names in every query below with the real ones.
+ * SCHEMA — CONFIRMED 2026-09-11 from a live run's self-diagnostic dump (see
+ * [dumpSchema] / the "no such table: shlokas" error it replaced):
+ *
+ *   shlok(id, chapter, verse, verse_id, speaker, slok, transliteration)
+ *
+ * i.e. the original guess had both the table name (`shlokas` → `shlok`) and
+ * every column name wrong (`adhyaya`→`chapter`, `shloka`→`verse`,
+ * `deva_text`→`slok`, `translit_text`→`transliteration`) — this matches the
+ * column layout of several well-known public Gita verse datasets, for
+ * reference if another pack in this family needs the same treatment.
+ * `verse_id` (a probable global 1..~700 running number) and `id` (likely the
+ * SQLite rowid) both exist but aren't needed here — every query below
+ * addresses by (chapter, verse) instead, which is stable and human-readable.
+ * `sqlite_sequence` is SQLite's own autoincrement bookkeeping table, not
+ * app data — ignored.
+ *
+ * The self-diagnosing [withPack] wrapper is kept even though the schema is
+ * now known, since [GitaBhashyaRepository]'s scholar-pack schema is still
+ * unconfirmed and may need the same treatment.
  */
 object GitaCoreTextRepository {
 
     private const val FOLDER = "gita_bhasya"
-
-    // ⚠ UNCONFIRMED — replace once the on-screen error (see doc comment above)
-    // shows the real name after this file is deployed.
-    private const val TABLE = "shlokas"
+    private const val TABLE = "shlok"
 
     /** The Gita always has 18 adhyayas — this is textual fact, not pack-dependent. */
     val ADHYAYA_OPTIONS: List<Int> = (1..18).toList()
+
+    // Real column names aliased to the domain names used everywhere else in
+    // this file/GitaShloka, so only this one constant needs to change if a
+    // future pack in the same family uses yet another naming convention.
+    private const val COLUMNS =
+        "chapter AS adhyaya, verse AS shloka, slok AS deva_text, transliteration AS translit_text, speaker"
 
     fun isDownloaded(context: Context): Boolean =
         PackDownloadManager.isDownloaded(context, FOLDER, GitaManifest.CORE_TEXT_PACK_FILE)
@@ -65,7 +80,7 @@ object GitaCoreTextRepository {
             withPack(context) { database ->
                 val list = mutableListOf<Int>()
                 database.rawQuery(
-                    "SELECT shloka FROM $TABLE WHERE adhyaya = ? ORDER BY shloka",
+                    "SELECT verse FROM $TABLE WHERE chapter = ? ORDER BY verse",
                     arrayOf(adhyaya.toString())
                 ).use { c -> while (c.moveToNext()) list.add(c.getInt(0)) }
                 list
@@ -77,8 +92,7 @@ object GitaCoreTextRepository {
         withContext(Dispatchers.IO) {
             withPack(context) { database ->
                 database.rawQuery(
-                    "SELECT adhyaya, shloka, deva_text, translit_text FROM $TABLE " +
-                        "WHERE adhyaya = ? AND shloka = ? LIMIT 1",
+                    "SELECT $COLUMNS FROM $TABLE WHERE chapter = ? AND verse = ? LIMIT 1",
                     arrayOf(adhyaya.toString(), shloka.toString())
                 ).use { c -> if (c.moveToFirst()) c.toShloka() else null }
             }
@@ -89,24 +103,23 @@ object GitaCoreTextRepository {
         withContext(Dispatchers.IO) {
             withPack(context) { database ->
                 database.rawQuery(
-                    "SELECT adhyaya, shloka, deva_text, translit_text FROM $TABLE " +
-                        "ORDER BY adhyaya, shloka LIMIT 1", null
+                    "SELECT $COLUMNS FROM $TABLE ORDER BY chapter, verse LIMIT 1", null
                 ).use { c -> if (c.moveToFirst()) c.toShloka() else null }
             }
         }
 
     /**
      * Next verse in reading order, spanning adhyaya boundaries. Ordered by
-     * (adhyaya, shloka) rather than assuming a contiguous numbering — same
+     * (chapter, verse) rather than assuming a contiguous `verse_id` — same
      * defensive approach as [MahabharataRepository.getAdjacentAdhyayas].
      */
     suspend fun getNext(context: Context, adhyaya: Int, shloka: Int): Result<GitaShloka?> =
         withContext(Dispatchers.IO) {
             withPack(context) { database ->
                 database.rawQuery(
-                    "SELECT adhyaya, shloka, deva_text, translit_text FROM $TABLE " +
-                        "WHERE (adhyaya = ? AND shloka > ?) OR adhyaya > ? " +
-                        "ORDER BY adhyaya ASC, shloka ASC LIMIT 1",
+                    "SELECT $COLUMNS FROM $TABLE " +
+                        "WHERE (chapter = ? AND verse > ?) OR chapter > ? " +
+                        "ORDER BY chapter ASC, verse ASC LIMIT 1",
                     arrayOf(adhyaya.toString(), shloka.toString(), adhyaya.toString())
                 ).use { c -> if (c.moveToFirst()) c.toShloka() else null }
             }
@@ -116,19 +129,19 @@ object GitaCoreTextRepository {
         withContext(Dispatchers.IO) {
             withPack(context) { database ->
                 database.rawQuery(
-                    "SELECT adhyaya, shloka, deva_text, translit_text FROM $TABLE " +
-                        "WHERE (adhyaya = ? AND shloka < ?) OR adhyaya < ? " +
-                        "ORDER BY adhyaya DESC, shloka DESC LIMIT 1",
+                    "SELECT $COLUMNS FROM $TABLE " +
+                        "WHERE (chapter = ? AND verse < ?) OR chapter < ? " +
+                        "ORDER BY chapter DESC, verse DESC LIMIT 1",
                     arrayOf(adhyaya.toString(), shloka.toString(), adhyaya.toString())
                 ).use { c -> if (c.moveToFirst()) c.toShloka() else null }
             }
         }
 
     /**
-     * Opens the pack and runs [block]; on ANY exception (wrong table name,
-     * wrong column name, anything), re-throws with the pack's real schema
-     * appended so the error reaching the screen is self-explanatory instead
-     * of a dead end. See class doc comment for why this exists.
+     * Opens the pack and runs [block]; on ANY exception (wrong table/column
+     * name, anything), re-throws with the pack's real schema appended so a
+     * future mismatch (e.g. in a sibling pack) is self-explanatory instead of
+     * a dead end. This is how the `shlok` schema above was actually found.
      */
     private suspend fun <T> withPack(context: Context, block: (SQLiteDatabase) -> T): Result<T> =
         PackDownloadManager.openPack(context, FOLDER, GitaManifest.CORE_TEXT_PACK_FILE).mapCatching { sqlite ->
@@ -161,7 +174,8 @@ object GitaCoreTextRepository {
         adhyaya = getInt(0),
         shloka = getInt(1),
         devanagari = getString(2),
-        transliteration = getStringOrNull(3)
+        transliteration = getStringOrNull(3),
+        speaker = getStringOrNull(4)
     )
 
     /** [Cursor] has no built-in null-safe string getter; small local helper for readability. */
