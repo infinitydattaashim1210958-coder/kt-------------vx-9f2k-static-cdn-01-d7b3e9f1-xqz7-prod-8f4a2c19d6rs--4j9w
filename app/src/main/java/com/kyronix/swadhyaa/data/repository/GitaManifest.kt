@@ -15,23 +15,30 @@ package com.kyronix.swadhyaa.data.repository
  * tabs (mirroring [com.kyronix.swadhyaa.presentation.reader.ReaderActivity]'s
  * Bengali/English/Hindi/… tabs) work the same way they already do for Veda.
  *
- * Updated 2026-09-10 against a second pass of real-book-title research the
- * maintainer supplied (title, author, sometimes translator) for most of the
- * 18 packs — see [WORK_TITLE_NOTES] below for what changed and what was
- * flagged rather than applied.
+ * UPDATE 2026-09-11 — [name] is now the actual published work's title (as
+ * researched and supplied by the maintainer), not the scholar's bare personal
+ * name, per request: the scholar list should read like a bibliography ("Sri
+ * Ramanuja Gita Bhasya, tr. Swami Adidevananda") rather than just a name. The
+ * commentator's plain name is kept as a trailing `//` comment on each entry
+ * for anyone maintaining this list later. [workTitle] — previously used for
+ * this same citation, shown as a subtitle under [name] — is now redundant and
+ * left null everywhere; kept as a field in case a future entry wants a SHORT
+ * name plus a LONGER citation shown separately again.
  *
- * Pack schema is still an ASSUMPTION, unverified against `gita_bhasya/manifest.json`
- * (not reachable from this environment) — see [GitaBhashyaRepository]'s doc
- * comment. Known gaps carried over from the first pass:
- *   - `gambir_et_db.gz` (no "h") is the real on-disk filename; "গম্ভীরানন্দ" is
- *     the correct spelling, used only in the label.
- *   - `slok_deva_translit_db.gz` is treated as the base verse text (not a
- *     scholar pack) — see [GitaManifest.CORE_TEXT_PACK_FILE].
+ * Schema for `commentary` packs is CONFIRMED (see [GitaBhashyaRepository]'s
+ * doc comment): `commentary(id, chapter, verse, verse_id, author, et, ht, ec,
+ * hc, sc)` — one wide row per verse, dedicated column per language. The base
+ * verse-text pack's schema is CONFIRMED too (see [GitaCoreTextRepository]):
+ * `shlok(id, chapter, verse, verse_id, speaker, slok, transliteration)`.
+ *
+ * Known gaps carried over from earlier passes:
+ *   - `gambir_et_db.gz` (no "h") is the real on-disk filename.
+ *   - `slok_deva_translit_db.gz` is the base verse text (not a scholar pack).
  *   - `san_et_db.gz` is labeled "স্বামী স্বরূপানন্দ" provisionally; still
- *     unconfirmed against the 21-scholar list.
+ *     unconfirmed against the original 21-scholar list.
  */
 data class GitaFieldInfo(
-    /** Matches a `field_key` value inside the pack (assumption — see doc comment above). */
+    /** Matches a column name in the `commentary` table: et/ht/ec/hc/sc. */
     val key: String,
     /** Bengali label for this field, shown above its text in the bhashya panel. */
     val label: String
@@ -40,7 +47,11 @@ data class GitaFieldInfo(
 data class GitaScholarInfo(
     /** Unique slug — one per (scholar, language) row, e.g. "raman_en", "raman_sa". */
     val id: String,
-    /** Bengali display name of the scholar/commentator. */
+    /**
+     * Display text for this row — the actual published work's title (see
+     * class doc comment for why this changed from a bare scholar name), used
+     * both in the scholar list and as the bold header in the bhashya panel.
+     */
     val name: String,
     /** Which language tab this row appears under: "english" | "hindi" | "sanskrit". */
     val language: String,
@@ -48,12 +59,7 @@ data class GitaScholarInfo(
     val fields: List<GitaFieldInfo>,
     /** Exact filename in `gita_bhasya/` on the DB repo (verified against the repo listing). */
     val packFile: String,
-    /**
-     * The actual published work this row's text comes from, where confirmed by
-     * the maintainer's research — shown as a citation under the scholar's name
-     * in the bhashya panel. Null where not yet confirmed (unchanged from the
-     * generic description in the original mapping table).
-     */
+    /** Currently unused everywhere (see class doc comment) — reserved for a future secondary citation line. */
     val workTitle: String? = null
 )
 
@@ -65,7 +71,8 @@ object GitaManifest {
     /** Base Gita verse text (Devanagari + transliteration) — see [GitaCoreTextRepository]. */
     const val CORE_TEXT_PACK_FILE = "slok_deva_translit_db.gz"
 
-    // Field-type codes decoded from the repo's own filename convention.
+    // Field-type codes decoded from the repo's own filename convention —
+    // also the real `commentary` table's column names (confirmed).
     private val ET = GitaFieldInfo("et", "ইংরেজি অনুবাদ")     // English Translation
     private val HT = GitaFieldInfo("ht", "হিন্দি অনুবাদ")      // Hindi Translation
     private val SC = GitaFieldInfo("sc", "সংস্কৃত ভাষ্য")      // Sanskrit Commentary
@@ -73,77 +80,93 @@ object GitaManifest {
     private val EC = GitaFieldInfo("ec", "ইংরেজি ভাষ্য")       // English Commentary
 
     val SCHOLARS: List<GitaScholarInfo> = listOf(
-        GitaScholarInfo(
-            "adi_en", "স্বামী আদিদেবানন্দ", "english", listOf(ET), "adi_et_db.gz",
-            workTitle = "শ্রী রামানুজ-গীতাভাষ্যের ইংরেজি অনুবাদ (Sri Ramanuja Gita Bhasya, tr. Swami Adidevananda)"
+        // ── English ──────────────────────────────────────────────────────
+        GitaScholarInfo( // Swami Adidevananda
+            "adi_en", "Sri Ramanuja Gita Bhasya, tr. Swami Adidevananda",
+            "english", listOf(ET), "adi_et_db.gz"
         ),
-        GitaScholarInfo("anand_sa", "শ্রী আনন্দগিরি", "sanskrit", listOf(SC), "anand_sc_db.gz"),
-        GitaScholarInfo("chinmay_hi", "স্বামী চিন্ময়ানন্দ", "hindi", listOf(HC), "chinmay_hc_db.gz"),
-        GitaScholarInfo(
-            "dhan_sa", "শ্রী ধনপতি", "sanskrit", listOf(SC), "dhan_sc_db.gz",
-            workTitle = "পরমার্থ-প্রপা (Paramartha-Prapa)"
+        GitaScholarInfo( // Swami Gambhirananda — on-disk filename lacks the "h"
+            "gambhir_en", "Bhagavad Gita: With the Commentary of Shankaracharya by Swami Gambhirananda",
+            "english", listOf(ET), "gambir_et_db.gz"
         ),
-        // on-disk filename lacks the "h" — see doc comment above
-        GitaScholarInfo(
-            "gambhir_en", "স্বামী গম্ভীরানন্দ", "english", listOf(ET), "gambir_et_db.gz",
-            workTitle = "শঙ্করাচার্যের ভাষ্যের ইংরেজি অনুবাদ (Bhagavad Gita: With the Commentary of Shankaracharya)"
+        GitaScholarInfo( // Purohit Swami
+            "purohit_en", "The Bhagavad Gita: The Philosophy of Life by Shri Purohit Swami",
+            "english", listOf(ET), "purohit_et_db.gz"
         ),
-        GitaScholarInfo(
-            "madhav_sa", "শ্রী মাধবাচার্য", "sanskrit", listOf(SC), "madhav_sc_db.gz",
-            workTitle = "গীতাতাৎপর্যনির্ণয়ঃ (Gita Tatparya Nirnaya)"
+        GitaScholarInfo( // Sri Ramanuja (English side of raman_et_sc_db.gz)
+            "raman_en", "Bhagavad Gita: Based on Sri Ramanuja's Gitabhashyam, tr. Sri Veeravalli Jagannathanand",
+            "english", listOf(ET), "raman_et_sc_db.gz"
         ),
-        // NOT "Shri Krishnayan / Gopal Neelkanth Dandekar" — that's a 20th-c.
-        // Marathi novel by a different, unrelated "Neelkanth"; see WORK_TITLE_NOTES.
-        GitaScholarInfo("neel_sa", "শ্রী নীলকণ্ঠ", "sanskrit", listOf(SC), "neel_sc_db.gz"),
-        GitaScholarInfo(
-            "purohit_en", "শ্রী পুরোহিত স্বামী", "english", listOf(ET), "purohit_et_db.gz",
-            workTitle = "The Bhagavad Gita: The Philosophy of Life"
+        GitaScholarInfo( // Adi Shankaracharya (English side of sankar_et_ht_sc_db.gz)
+            "sankar_en", "The Bhagavad Gita with the Commentary of Sri Sankaracharya, tr. Alladi Mahadeva Sastry",
+            "english", listOf(ET), "sankar_et_ht_sc_db.gz"
         ),
-        GitaScholarInfo(
-            "puru_sa", "শ্রী পুরুষোত্তমজী", "sanskrit", listOf(SC), "puru_sc_db.gz",
-            workTitle = "অমৃততরঙ্গিণী (Amrita-Tarangini)"
+        GitaScholarInfo( // Swami Sivananda
+            "siva_en", "The Bhagavad Gita (Swami Sivananda, Divine Life Society)",
+            "english", listOf(ET, EC), "siva_et_ec_db.gz"
         ),
-        GitaScholarInfo(
-            "raman_en", "শ্রী রামানুজ", "english", listOf(ET), "raman_et_sc_db.gz",
-            workTitle = "Bhagavad Gita: Based on Sri Ramanuja's Gitabhashyam, tr. Sri Veeravalli Jagannathanand"
+        GitaScholarInfo( // provisional identity — unconfirmed against the 21-scholar list
+            "san_en", "Srimad Bhagavad Gita (Swami Swarupananda)",
+            "english", listOf(ET), "san_et_db.gz"
         ),
-        GitaScholarInfo(
-            "raman_sa", "শ্রী রামানুজ", "sanskrit", listOf(SC), "raman_et_sc_db.gz",
-            workTitle = "মূল শ্রীভাষ্যম্ (গীতাভাষ্যম্) — সংস্কৃত"
+
+        // ── Hindi ────────────────────────────────────────────────────────
+        GitaScholarInfo( // Swami Chinmayananda
+            "chinmay_hi", "श्रीमद्भगवद्गीता - स्वामी चिन्मयानन्द भाष्य",
+            "hindi", listOf(HC), "chinmay_hc_db.gz"
         ),
-        GitaScholarInfo(
-            "rams_hi", "স্বামী রামসুখদাস", "hindi", listOf(HT, HC), "rams_ht_hc_db.gz",
-            workTitle = "সাধক সঞ্জীবনী (Sadhaka Sanjeevani)"
+        GitaScholarInfo( // Swami Ramsukhdas
+            "rams_hi", "Sadhaka Sanjeevani (Swami Ramsukhdas)",
+            "hindi", listOf(HT, HC), "rams_ht_hc_db.gz"
         ),
-        // provisional identity — unconfirmed against the 21-scholar list
-        GitaScholarInfo("san_en", "স্বামী স্বরূপানন্দ", "english", listOf(ET), "san_et_db.gz"),
-        GitaScholarInfo(
-            "sankar_en", "শ্রী শঙ্করাচার্য", "english", listOf(ET), "sankar_et_ht_sc_db.gz",
-            workTitle = "The Bhagavad Gita with the Commentary of Sri Sankaracharya, tr. Alladi Mahadeva Sastry"
+        GitaScholarInfo( // Adi Shankaracharya (Hindi side of sankar_et_ht_sc_db.gz) — Keshavlal Shastri's translation
+            "sankar_hi", "শঙ্করভাষ্য ও আনন্দগিরি-ব্যাখ্যার হিন্দি অনুবাদ, tr. Acharya Keshavlal Shastri",
+            "hindi", listOf(HT), "sankar_et_ht_sc_db.gz"
         ),
-        GitaScholarInfo(
-            "sankar_hi", "শ্রী শঙ্করাচার্য", "hindi", listOf(HT), "sankar_et_ht_sc_db.gz",
-            workTitle = "শঙ্করভাষ্য ও আনন্দগিরি-ব্যাখ্যার হিন্দি অনুবাদ, translator Acharya Keshavlal Shastri"
+        GitaScholarInfo( // Swami Tejomayananda
+            "tej_hi", "Talks on Shrimad Bhagavad Gita (Swami Tejomayananda)",
+            "hindi", listOf(HT), "tej_ht_db.gz"
         ),
-        GitaScholarInfo("sankar_sa", "শ্রী শঙ্করাচার্য", "sanskrit", listOf(SC), "sankar_et_ht_sc_db.gz"),
-        GitaScholarInfo(
-            "siva_en", "স্বামী শিবানন্দ", "english", listOf(ET, EC), "siva_et_ec_db.gz",
-            workTitle = "The Bhagavad Gita (Swami Sivananda, Divine Life Society)"
+
+        // ── Sanskrit ─────────────────────────────────────────────────────
+        GitaScholarInfo( // Anandagiri
+            "anand_sa", "श्रीमद्भगवद्गीता(आनन्दगिरिकृतटीकासहितशाङ्करभाष्यसंवलिता)",
+            "sanskrit", listOf(SC), "anand_sc_db.gz"
         ),
-        GitaScholarInfo("tej_hi", "স্বামী তেজোময়ানন্দ", "hindi", listOf(HT), "tej_ht_db.gz",
-            workTitle = "Talks on Shrimad Bhagavad Gita"
+        GitaScholarInfo( // Dhanapati Suri
+            "dhan_sa", "परमार्थ प्रपा (श्री धनपति)",
+            "sanskrit", listOf(SC), "dhan_sc_db.gz"
         ),
-        // NOT "Sri Subodhini" — that's Vallabhacharya's commentary on the
-        // Bhagavata Purana, a different text; see WORK_TITLE_NOTES.
-        GitaScholarInfo(
-            "vallabh_sa", "শ্রী বল্লভাচার্য", "sanskrit", listOf(SC), "vallabh_sc_db.gz",
-            workTitle = "তত্ত্বদীপিকা (Tattva-Dipika)"
+        GitaScholarInfo( // Sri Madhvacharya
+            "madhav_sa", "गीता तात्पर्यनिर्णयः (श्री माधवाचार्य)",
+            "sanskrit", listOf(SC), "madhav_sc_db.gz"
         ),
-        // NOT "Bhagavad Gita As Viewed by Swami Vivekananda" — title/author
-        // mismatch, doesn't clearly belong to Vedanta Desika; see WORK_TITLE_NOTES.
-        GitaScholarInfo(
-            "venkat_sa", "বেদান্তদেশিক (বেঙ্কটনাথ)", "sanskrit", listOf(SC), "venkat_sc_db.gz",
-            workTitle = "তাৎপর্যচন্দ্রিকা (Tatparya-Chandrika)"
+        GitaScholarInfo( // Neelakantha Chaturdhara — NOT "Shri Krishnayan / Gopal
+            // Neelkanth Dandekar", a 20th-c. Marathi novel by an unrelated "Neelkanth".
+            "neel_sa", "तत्त्वप्रकाशिका (गीता नीलकण्ठी) - श्री नीलकंठ चतुर्धर",
+            "sanskrit", listOf(SC), "neel_sc_db.gz"
+        ),
+        GitaScholarInfo( // Purushottama
+            "puru_sa", "अमृत तरङ्गिनी (श्री पुरुषोत्तमजी)",
+            "sanskrit", listOf(SC), "puru_sc_db.gz"
+        ),
+        GitaScholarInfo( // Sri Ramanuja (Sanskrit side of raman_et_sc_db.gz)
+            "raman_sa", "मूल श्रीभाष्यम् (गीता भाष्यम्) - श्री रामानुज",
+            "sanskrit", listOf(SC), "raman_et_sc_db.gz"
+        ),
+        GitaScholarInfo( // Adi Shankaracharya (Sanskrit side of sankar_et_ht_sc_db.gz)
+            "sankar_sa", "शाङ्कर गीताभाष्य",
+            "sanskrit", listOf(SC), "sankar_et_ht_sc_db.gz"
+        ),
+        GitaScholarInfo( // Vallabhacharya — NOT "Sri Subodhini", which is his
+            // commentary on the Bhagavata Purana, a different text.
+            "vallabh_sa", "तत्त्व दीपिका - श्री वल्लभाचार्य",
+            "sanskrit", listOf(SC), "vallabh_sc_db.gz"
+        ),
+        GitaScholarInfo( // Vedanta Desika — NOT "Bhagavad Gita As Viewed by Swami
+            // Vivekananda", a title/author mismatch from the earlier research pass.
+            "venkat_sa", "तात्पर्य चन्द्रिका (श्री वेदान्त देशिक)",
+            "sanskrit", listOf(SC), "venkat_sc_db.gz"
         )
     )
 
