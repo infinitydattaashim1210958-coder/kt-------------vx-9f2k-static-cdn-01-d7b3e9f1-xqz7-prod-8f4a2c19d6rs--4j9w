@@ -195,6 +195,24 @@ class GitaActivity : AppCompatActivity() {
         root.addView(col)
     }
 
+    /**
+     * `speaker` came as a bonus once the pack's real schema was confirmed
+     * (see GitaCoreTextRepository's doc comment) — the source data's values
+     * are unconfirmed/untranslated, so this only maps the names virtually
+     * certain to appear in a Gita dataset and otherwise shows the raw value
+     * rather than hiding it.
+     */
+    private fun speakerInBengali(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        return when (raw.trim().lowercase()) {
+            "krishna", "sri krishna", "shri krishna", "the blessed lord" -> "শ্রীকৃষ্ণ"
+            "arjuna" -> "অর্জুন"
+            "sanjaya" -> "সঞ্জয়"
+            "dhritarashtra", "dhritrashtra" -> "ধৃতরাষ্ট্র"
+            else -> raw
+        }
+    }
+
     private fun sectionDivider() = TextView(this).apply {
         setBackgroundColor(SURFACE)
         layoutParams = LinearLayout.LayoutParams(
@@ -220,7 +238,9 @@ class GitaActivity : AppCompatActivity() {
                     translitText.text = m.transliteration.orEmpty()
                     translitText.visibility =
                         if (m.transliteration.isNullOrBlank()) android.view.View.GONE else android.view.View.VISIBLE
-                    statusText.text = "গীতা ${m.adhyaya}/${m.shloka}"
+                    val speakerBn = speakerInBengali(m.speaker)
+                    statusText.text = "গীতা ${m.adhyaya}/${m.shloka}" +
+                        (speakerBn?.let { " · বক্তা: $it" } ?: "")
 
                     renderJump(s)
                     renderLangTabs(s)
