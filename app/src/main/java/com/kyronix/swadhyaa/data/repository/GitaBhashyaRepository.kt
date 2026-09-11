@@ -10,29 +10,37 @@ import kotlinx.coroutines.withContext
  * গীতা ভাষ্য (Bhagavad Gita commentary) — reads/downloads the pack behind one
  * [GitaScholarInfo] row. Several rows can point at the same [GitaScholarInfo.packFile]
  * (e.g. `sankar_et_ht_sc_db.gz` backs three rows, one per language) — each call
- * here filters to just THIS row's [GitaScholarInfo.fields], so a query never
+ * here reads only THIS row's [GitaScholarInfo.fields] columns, so a query never
  * leaks another row's language into the wrong tab even though they share a file.
  *
- * Mirrors [BhashyaRepository] (Veda) / [RamayanaBhashyaRepository] (Ramayana):
- * open via [PackDownloadManager], plain `rawQuery`, never merged into
- * [com.kyronix.swadhyaa.data.local.MasterDatabase].
+ * SCHEMA — CONFIRMED 2026-09-11 from a live run's self-diagnostic dump against
+ * `adi_et_db.gz`:
  *
- * SCHEMA STATUS (2026-09-11): [TABLE]'s name below is UNCONFIRMED — the sibling
- * assumption for the base-text pack (`shlokas`, in [GitaCoreTextRepository])
- * already turned out wrong (`Error: no such table: shlokas`), so treat this
- * one the same way until proven otherwise. Every query is wrapped by
- * [withPack] so a wrong table/column name doesn't just fail — the exception
- * message gets the pack's real tables/columns appended
- * ([GitaCoreTextRepository.dumpSchema]), and that message is exactly what
- * already reaches the screen via `GitaUiState.bhashyaError`. Fix [TABLE] and
- * the column names once a real bhashya pack's schema shows up there.
+ *   commentary(id, chapter, verse, verse_id, author, et, ht, ec, hc, sc)
+ *
+ * This is a DIFFERENT shape than first assumed (and different from Veda's/
+ * Ramayana's field_key+value row-per-field packs): ONE row per (chapter,
+ * verse), with a dedicated column per language — et/ht/ec/hc/sc — populated
+ * only where that scholar actually wrote in that language, the rest left
+ * null/blank. Handily, [GitaFieldInfo.key] in [GitaManifest] already uses
+ * exactly these five codes, so no manifest changes were needed — a field key
+ * IS the column name here. `author` repeats the scholar's name per row
+ * (redundant with [GitaScholarInfo.name], not currently read); `id`/`verse_id`
+ * aren't needed since every query addresses by (chapter, verse), matching
+ * [GitaCoreTextRepository]'s base-text pack. `sqlite_sequence` is SQLite's
+ * own bookkeeping table, not app data.
+ *
+ * Every query still goes through [withPack], which appends the pack's real
+ * schema to any exception it doesn't expect — kept as a safety net in case a
+ * different scholar's pack turns out to deviate from this shape.
  */
 object GitaBhashyaRepository {
 
     private const val FOLDER = "gita_bhasya"
+    private const val TABLE = "commentary"
 
-    // ⚠ UNCONFIRMED — see class doc comment.
-    private const val TABLE = "gita_bhashyas"
+    /** Every possible language column, in the pack's own order — read once, filtered per scholar below. */
+    private val ALL_COLUMNS = listOf("et", "ht", "ec", "hc", "sc")
 
     fun isDownloaded(context: Context, scholar: GitaScholarInfo): Boolean =
         PackDownloadManager.isDownloaded(context, FOLDER, scholar.packFile)
@@ -48,10 +56,9 @@ object GitaBhashyaRepository {
 
     /**
      * Reads [scholar]'s field(s) for verse (adhyaya, shloka). Returns an empty
-     * list (not a failure) if this scholar simply has no entry for this verse;
-     * [Result.failure] for a real I/O/download/schema error — and per the class
-     * doc comment, a schema error's message already tells you what's really
-     * in the pack instead of leaving you to guess again.
+     * list (not a failure) if this scholar simply has no row, or every column
+     * they care about is null/blank, for this verse; [Result.failure] only
+     * for a real I/O/download/schema error.
      */
     suspend fun getBhashya(
         context: Context,
@@ -61,18 +68,23 @@ object GitaBhashyaRepository {
     ): Result<List<BhashyaField>> = withContext(Dispatchers.IO) {
         withPack(context, scholar) { database ->
             val cursor = database.rawQuery(
-                "SELECT field_key, value FROM $TABLE WHERE adhyaya = ? AND shloka = ?",
+                "SELECT ${ALL_COLUMNS.joinToString(", ")} FROM $TABLE WHERE chapter = ? AND verse = ? LIMIT 1",
                 arrayOf(adhyaya.toString(), shloka.toString())
             )
-            val raw = mutableMapOf<String, String>()
+            val byColumn = mutableMapOf<String, String>()
             cursor.use {
-                while (it.moveToNext()) raw[it.getString(0)] = it.getString(1)
+                if (it.moveToFirst()) {
+                    ALL_COLUMNS.forEachIndexed { i, col ->
+                        val v = if (it.isNull(i)) null else it.getString(i)
+                        if (!v.isNullOrBlank()) byColumn[col] = v
+                    }
+                }
             }
             // Only THIS row's fields, in its declared order — a pack shared
             // with other rows (e.g. sankar_et_ht_sc) never leaks another
-            // row's language/field into this one.
+            // row's language/column into this one.
             scholar.fields.mapNotNull { f ->
-                raw[f.key]?.let { value -> BhashyaField(f.label, value) }
+                byColumn[f.key]?.let { value -> BhashyaField(f.label, value) }
             }
         }
     }
