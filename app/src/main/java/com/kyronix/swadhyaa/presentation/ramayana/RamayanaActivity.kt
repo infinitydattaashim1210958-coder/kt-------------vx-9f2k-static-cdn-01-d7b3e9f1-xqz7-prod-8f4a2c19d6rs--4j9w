@@ -17,13 +17,17 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.kyronix.swadhyaa.data.local.RamayanaCoreDatabase
+import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.ui.theme.AppColors
+import com.kyronix.swadhyaa.ui.theme.FontManager
 import com.kyronix.swadhyaa.ui.gesture.attachSwipeNavigation
 import com.kyronix.swadhyaa.data.repository.BhashyaField
 import com.kyronix.swadhyaa.data.repository.RamayanaBhashyaRepository
 import com.kyronix.swadhyaa.data.repository.RamayanaRepository
 import com.kyronix.swadhyaa.data.repository.ShlokaContent
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * Ramayana Reader — same 3-box jump pattern as the Veda reader (কাণ্ড/সর্গ/শ্লোক
@@ -73,11 +77,25 @@ class RamayanaActivity : AppCompatActivity() {
     private lateinit var btnNext: Button
     private lateinit var bhashyaContent: LinearLayout
 
+    // BUGFIX (font not applying app-wide): this screen never consulted the
+    // user's font settings at all — every TextView used the hardcoded system
+    // font regardless of what was chosen in Settings. Resolved the same way
+    // ReaderActivity/GitaActivity already do it, so সেটিংস-এ বাছাই করা ফন্ট
+    // এখানেও কাজ করে।
+    private lateinit var devanagariTypeface: Typeface
+    private lateinit var banglaTypeface: Typeface
+
     private val density by lazy { resources.displayMetrics.density }
     private fun dp(v: Int) = (v * density).toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Resolve fonts from user settings before UI is built.
+        val settings = runBlocking { SettingsRepository(this@RamayanaActivity).settingsFlow.first() }
+        devanagariTypeface = FontManager.devanagariTypeface(this, settings.devanagariFont)
+        banglaTypeface = FontManager.banglaTypeface(this, settings.banglaFont)
+
         val root = buildUi()
         root.attachSwipeNavigation(onSwipeLeft = { vm.next() }, onSwipeRight = { vm.prev() })
         setContentView(root)
@@ -132,6 +150,7 @@ class RamayanaActivity : AppCompatActivity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             gravity = Gravity.CENTER
             setLineSpacing(0f, 1.35f)
+            typeface = devanagariTypeface
             text = "…"
         }
         card.addView(sanskritText)
@@ -337,6 +356,7 @@ class RamayanaActivity : AppCompatActivity() {
                 setTextColor(IVORY)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setLineSpacing(0f, 1.3f)
+                typeface = banglaTypeface
             })
         }
     }
