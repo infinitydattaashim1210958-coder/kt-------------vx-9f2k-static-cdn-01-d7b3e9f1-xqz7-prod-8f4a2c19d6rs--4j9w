@@ -49,26 +49,33 @@ object LibraryDbBookRepository {
     private const val FOLDER = "library_books"
 
     /**
-     * BUGFIX: previously `masterDao().getLibraryChapterCount(bookId) > 0`,
-     * a `@Query("SELECT COUNT(*) ...") suspend fun ...(): Int` — see
-     * MasterDao.kt's comment on the now-removed method for why a bare
-     * Int/Long return from @Query is the one shape Room can misroute to
-     * "SQLiteDatabase query or rawQuery methods only" territory. This
-     * reuses the already-correct getLibraryChapters() (List<Entity>
-     * return — unambiguous) instead of adding a second query shape.
-     *
-     * Wrapped so that if opening/reading MasterDatabase fails for any
-     * other reason in the future, the error text names this exact call —
-     * there's no convenient adb/logcat step in a phone-only workflow, so
-     * the on-screen message needs to carry that detail itself.
+     * DIAGNOSTIC (temporary — see isDownloaded below): the previous fix
+     * here (switching getLibraryChapterCount(): Int → getLibraryChapters():
+     * List<Entity>, on the theory that a bare Int return from @Query was
+     * the ambiguous shape Room misrouted) did NOT resolve the error — the
+     * exact same SQLiteException still fires, now from getLibraryChapters
+     * itself, which has no such ambiguity. That disproves the "Int return
+     * type" theory. Since there's no adb/logcat available here, the only
+     * way to see the actual throw site is to put the stack trace itself
+     * on screen — hence this wrapper. Once the real throw site is visible
+     * in a screenshot, this can shrink back down to a plain message.
      */
     suspend fun isDownloaded(context: Context, bookId: String): Boolean = withContext(Dispatchers.IO) {
         try {
             MasterDatabase.getInstance(context).masterDao().getLibraryChapters(bookId).isNotEmpty()
         } catch (e: Exception) {
+            val trace = e.stackTrace.take(12).joinToString("\n") { "  at $it" }
+            var cause = e.cause
+            val causeTrace = StringBuilder()
+            var depth = 0
+            while (cause != null && depth < 3) {
+                causeTrace.append("\nCaused by ${cause.javaClass.name}: ${cause.message}\n")
+                causeTrace.append(cause.stackTrace.take(8).joinToString("\n") { "  at $it" })
+                cause = cause.cause
+                depth++
+            }
             throw IllegalStateException(
-                "LibraryDbBookRepository.isDownloaded/getLibraryChapters failed for bookId=$bookId — " +
-                    "${e.javaClass.simpleName}: ${e.message}",
+                "getLibraryChapters(bookId=$bookId) — ${e.javaClass.name}: ${e.message}\n$trace$causeTrace",
                 e
             )
         }
