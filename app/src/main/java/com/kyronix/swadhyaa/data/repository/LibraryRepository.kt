@@ -19,13 +19,25 @@ object LibraryRepository {
     suspend fun getCatalog(context: Context): Result<List<LibraryBookWithStatus>> {
         val manifestResult = LibraryManifest.fetch(context)
         val books = manifestResult.getOrElse { return Result.failure(it) }
-        val withStatus = books.map { book ->
-            val downloaded = when (book.type) {
-                "db" -> LibraryDbBookRepository.isDownloaded(context, book.id)
-                else -> LibraryHtmlBookRepository.isDownloaded(context, book)
+
+        // BUGFIX: this loop calls LibraryDbBookRepository.isDownloaded(),
+        // which opens MasterDatabase — previously NOT wrapped, so any
+        // failure here (the Room schema-mismatch crash this app just hit,
+        // or any future DB/IO problem) propagated out of this suspend
+        // function uncaught and crashed the whole app instead of showing
+        // an error card like a manifest-fetch failure already does above.
+        val withStatus = try {
+            books.map { book ->
+                val downloaded = when (book.type) {
+                    "db" -> LibraryDbBookRepository.isDownloaded(context, book.id)
+                    else -> LibraryHtmlBookRepository.isDownloaded(context, book)
+                }
+                LibraryBookWithStatus(book, if (downloaded) LibraryBookStatus.DOWNLOADED else LibraryBookStatus.NOT_DOWNLOADED)
             }
-            LibraryBookWithStatus(book, if (downloaded) LibraryBookStatus.DOWNLOADED else LibraryBookStatus.NOT_DOWNLOADED)
+        } catch (e: Exception) {
+            return Result.failure(e)
         }
+
         return Result.success(withStatus)
     }
 
