@@ -48,8 +48,30 @@ object LibraryDbBookRepository {
 
     private const val FOLDER = "library_books"
 
+    /**
+     * BUGFIX: previously `masterDao().getLibraryChapterCount(bookId) > 0`,
+     * a `@Query("SELECT COUNT(*) ...") suspend fun ...(): Int` — see
+     * MasterDao.kt's comment on the now-removed method for why a bare
+     * Int/Long return from @Query is the one shape Room can misroute to
+     * "SQLiteDatabase query or rawQuery methods only" territory. This
+     * reuses the already-correct getLibraryChapters() (List<Entity>
+     * return — unambiguous) instead of adding a second query shape.
+     *
+     * Wrapped so that if opening/reading MasterDatabase fails for any
+     * other reason in the future, the error text names this exact call —
+     * there's no convenient adb/logcat step in a phone-only workflow, so
+     * the on-screen message needs to carry that detail itself.
+     */
     suspend fun isDownloaded(context: Context, bookId: String): Boolean = withContext(Dispatchers.IO) {
-        MasterDatabase.getInstance(context).masterDao().getLibraryChapterCount(bookId) > 0
+        try {
+            MasterDatabase.getInstance(context).masterDao().getLibraryChapters(bookId).isNotEmpty()
+        } catch (e: Exception) {
+            throw IllegalStateException(
+                "LibraryDbBookRepository.isDownloaded/getLibraryChapters failed for bookId=$bookId — " +
+                    "${e.javaClass.simpleName}: ${e.message}",
+                e
+            )
+        }
     }
 
     /**
