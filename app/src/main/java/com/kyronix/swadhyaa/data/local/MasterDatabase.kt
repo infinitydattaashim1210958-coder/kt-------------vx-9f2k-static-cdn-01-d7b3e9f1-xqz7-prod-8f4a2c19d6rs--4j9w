@@ -121,12 +121,26 @@ abstract class MasterDatabase : RoomDatabase() {
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
-                        // synchronous/foreign_keys are plain setter
-                        // pragmas — no result set in assignment form,
-                        // so execSQL is fine for these two.
-                        db.execSQL("PRAGMA synchronous=NORMAL;")
-                        db.execSQL("PRAGMA foreign_keys=ON;")
-
+                        // BUGFIX #2 (same family as the journal_mode fix
+                        // above, found the same way — via the next
+                        // stack trace): `synchronous` is also a "safety
+                        // level" pragma, and SQLite refuses to change
+                        // those while a transaction is open —
+                        // "Safety level may not be changed inside a
+                        // transaction". Room's onCreate() callback runs
+                        // its entire body inside one implicit
+                        // transaction (that's how Room guarantees the
+                        // schema is created atomically), so execSQL
+                        // here always failed once it was actually
+                        // reached — it just never had been, for the
+                        // same reason as the journal_mode bug. Moved to
+                        // onOpen() below, which runs after that
+                        // transaction has already committed.
+                        //
+                        // DDL is unaffected by this restriction (CREATE
+                        // TABLE/INDEX/VIRTUAL TABLE are all fine inside
+                        // a transaction), so the FTS5 table stays here.
+                        //
                         // Room only creates tables for its declared @Entity
                         // classes — it has no concept of FTS5 virtual
                         // tables, so this one (needed for library book
@@ -141,6 +155,19 @@ abstract class MasterDatabase : RoomDatabase() {
                         // v1 never gets this callback (see MIGRATION_1_2,
                         // which creates this same table by hand too).
                         db.execSQL(FTS_TABLE_SQL)
+                    }
+
+                    override fun onOpen(db: SupportSQLiteDatabase) {
+                        super.onOpen(db)
+                        // Runs after any onCreate/migration transaction has
+                        // committed — safe for "safety level" pragmas — and
+                        // on EVERY open, which foreign_keys specifically
+                        // needs: SQLite does not persist that pragma in the
+                        // db file the way it persists journal_mode, so it
+                        // has to be re-applied per connection, not just once
+                        // at creation time.
+                        db.execSQL("PRAGMA synchronous=NORMAL;")
+                        db.execSQL("PRAGMA foreign_keys=ON;")
                     }
                 })
                 .addMigrations(MIGRATION_1_2)
