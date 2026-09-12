@@ -17,10 +17,14 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
+import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.data.repository.LibraryChapter
 import com.kyronix.swadhyaa.data.repository.LibraryParagraph
 import com.kyronix.swadhyaa.ui.theme.AppColors
+import com.kyronix.swadhyaa.ui.theme.FontManager
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * Structured reader for "db"-type library books (chapters/paragraphs/
@@ -40,6 +44,12 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
     private val density by lazy { resources.displayMetrics.density }
     private fun dp(v: Int) = (v * density).toInt()
 
+    // BUGFIX (font not applying app-wide): this screen — the actual page
+    // the user reads a downloaded book on — never consulted the user's
+    // font settings at all. Resolved the same way ReaderActivity/
+    // GitaActivity already do it for their own body text.
+    private lateinit var banglaTypeface: Typeface
+
     private val viewModel: LibraryDbBookReaderViewModel by lazy {
         ViewModelProvider(
             this,
@@ -53,6 +63,10 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
             ?: run { finish(); return }
         val bookTitle = intent.getStringExtra(EXTRA_BOOK_TITLE) ?: bookId
         title = bookTitle
+
+        // Resolve the Bangla font from user settings before UI is built.
+        val settings = runBlocking { SettingsRepository(this@LibraryDbBookReaderActivity).settingsFlow.first() }
+        banglaTypeface = FontManager.banglaTypeface(this, settings.banglaFont)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -106,7 +120,7 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
                 text = chapter.heading ?: ""
                 setTextColor(AppColors.ivory)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, chapter.headingSize.toFloat().coerceIn(14f, 28f))
-                typeface = if (chapter.headingBold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
+                typeface = if (chapter.headingBold) Typeface.create(banglaTypeface, Typeface.BOLD) else banglaTypeface
                 gravity = when {
                     chapter.headingCenter -> Gravity.CENTER
                     else -> Gravity.START
@@ -137,6 +151,7 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
                 this.text = spannable
                 setTextColor(AppColors.ivory)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, p.fontSize.toFloat().coerceIn(12f, 22f))
+                typeface = banglaTypeface
                 gravity = when {
                     p.isCenter -> Gravity.CENTER
                     p.isRight -> Gravity.END
@@ -160,6 +175,7 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
                     text = "${fn.num}. ${fn.note}"
                     setTextColor(AppColors.muted)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                    typeface = banglaTypeface
                     setPadding(0, 0, 0, dp(4))
                 })
             }
