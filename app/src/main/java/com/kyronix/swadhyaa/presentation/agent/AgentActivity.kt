@@ -15,10 +15,14 @@ import android.widget.*
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.data.repository.AnswerMode
 import com.kyronix.swadhyaa.ui.theme.AppColors
+import com.kyronix.swadhyaa.ui.theme.FontManager
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * AI scripture agent — chat UI.
@@ -44,8 +48,18 @@ class AgentActivity : AppCompatActivity() {
     private lateinit var sendButton: ImageButton
     private lateinit var loadingBar: ProgressBar
 
+    // BUGFIX (font not applying app-wide): the chat screen never consulted
+    // the user's font settings — bubbles and the input field always used
+    // the system font regardless of Settings. Resolved the same way
+    // ReaderActivity/GitaActivity already do it.
+    private lateinit var banglaTypeface: Typeface
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Resolve the Bangla font from user settings before UI is built.
+        val settings = runBlocking { SettingsRepository(this@AgentActivity).settingsFlow.first() }
+        banglaTypeface = FontManager.banglaTypeface(this, settings.banglaFont)
 
         val root = buildUi()
         setContentView(root)
@@ -180,6 +194,7 @@ class AgentActivity : AppCompatActivity() {
             setHintTextColor(AppColors.muted)
             setTextColor(AppColors.ivory)
             textSize = 15f
+            typeface = banglaTypeface
             background = roundedBg(AppColors.elevated, AppColors.border, dp(20))
             setPadding(dp(16), dp(10), dp(16), dp(10))
             inputType = InputType.TYPE_CLASS_TEXT or
@@ -253,6 +268,7 @@ class AgentActivity : AppCompatActivity() {
             text = msg.text
             textSize = 14.5f
             setTextColor(if (msg.isUser) AppColors.ivory else AppColors.ivory)
+            typeface = banglaTypeface
             setPadding(dp(14), dp(10), dp(14), dp(10))
             background = roundedBg(bubbleBg, bubbleBorder, dp(16))
             layoutParams = LinearLayout.LayoutParams(
