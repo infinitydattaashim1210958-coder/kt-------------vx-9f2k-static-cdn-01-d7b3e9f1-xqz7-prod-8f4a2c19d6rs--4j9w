@@ -101,11 +101,29 @@ abstract class MasterDatabase : RoomDatabase() {
                 MasterDatabase::class.java,
                 DB_NAME
             )
+                // BUGFIX (root cause of the "Queries can be performed using
+                // SQLiteDatabase query or rawQuery methods only" error —
+                // found via the full stack trace, which pointed at
+                // onCreate → execSQL("PRAGMA journal_mode=WAL;")):
+                // PRAGMA journal_mode=X is a special case in SQLite — it
+                // ALWAYS returns the resulting mode as a one-row result
+                // set, even in "assignment" form (unlike `synchronous` or
+                // `foreign_keys`, which don't). execSQL() runs statements
+                // through Android's "no result set expected" path, so it
+                // throws exactly this error the moment it gets a row back.
+                // This was pre-existing code — it just never ran
+                // successfully before, since onCreate never got a chance
+                // to fire until the schema-version crash was fixed. Fixed
+                // by asking Room itself to enable WAL (its own builder
+                // option, which does this correctly) instead of sending
+                // the PRAGMA as raw SQL.
+                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
-                        // Match master-db.js PRAGMAs for crash safety + concurrent reads.
-                        db.execSQL("PRAGMA journal_mode=WAL;")
+                        // synchronous/foreign_keys are plain setter
+                        // pragmas — no result set in assignment form,
+                        // so execSQL is fine for these two.
                         db.execSQL("PRAGMA synchronous=NORMAL;")
                         db.execSQL("PRAGMA foreign_keys=ON;")
 
