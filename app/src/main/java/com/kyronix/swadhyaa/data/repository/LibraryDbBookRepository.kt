@@ -53,18 +53,23 @@ object LibraryDbBookRepository {
      * SQLiteDatabase query or rawQuery methods only" crash traced (via
      * full stack trace) to MasterDatabase's onCreate() — a raw
      * `execSQL("PRAGMA journal_mode=WAL;")`, not anything in this DAO
-     * call. Fixed there (see MasterDatabase.kt). getLibraryChapters()
-     * itself was fine all along. Kept a short wrapper here (rather than
-     * none) since there's no adb/logcat access — if isDownloaded ever
-     * fails again for a different reason, naming the call directly in
-     * the on-screen message is still cheap insurance.
+     * call. Fixed there (see MasterDatabase.kt).
+     *
+     * Also brought in line with master-db.js's isLibraryBookInstalled
+     * (and its veda/ramayana/mahabharata equivalents), which all check
+     * installed_packages rather than inferring "downloaded" from content
+     * rows existing — that's the single source of truth this app's own
+     * download/remove flow already writes to (see downloadAndMerge/remove
+     * below), so checking it directly here instead of getLibraryChapters()
+     * matches the reference exactly and needs no schema-shape assumptions
+     * about the content tables at all.
      */
     suspend fun isDownloaded(context: Context, bookId: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            MasterDatabase.getInstance(context).masterDao().getLibraryChapters(bookId).isNotEmpty()
+            MasterDatabase.getInstance(context).masterDao().getInstalledPackage("libbook_$bookId") != null
         } catch (e: Exception) {
             throw IllegalStateException(
-                "getLibraryChapters(bookId=$bookId) failed — ${e.javaClass.simpleName}: ${e.message}",
+                "getInstalledPackage(libbook_$bookId) failed — ${e.javaClass.simpleName}: ${e.message}",
                 e
             )
         }
