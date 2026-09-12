@@ -813,7 +813,8 @@ class ShellActivity : AppCompatActivity() {
                 val isSelected = entry.id == settings.devanagariFont
                 // ── FIX: create label and preview separately, add to row, add row to col ──
                 val label = TextView(this@ShellActivity).apply {
-                    text = (if (isSelected) "● " else "○ ") + entry.displayName
+                    text = (if (isSelected) "● " else "○ ") + entry.displayName +
+                        (if (!entry.supportsVedicAccents) " ⚠ স্বরচিহ্ন সীমিত" else "")
                     setTextColor(if (isSelected) AppColors.goldBright else AppColors.muted)
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     setPadding(dp(4), dp(6), dp(8), dp(6))
