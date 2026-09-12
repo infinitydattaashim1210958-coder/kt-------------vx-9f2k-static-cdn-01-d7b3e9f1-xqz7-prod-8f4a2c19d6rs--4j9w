@@ -49,33 +49,22 @@ object LibraryDbBookRepository {
     private const val FOLDER = "library_books"
 
     /**
-     * DIAGNOSTIC (temporary — see isDownloaded below): the previous fix
-     * here (switching getLibraryChapterCount(): Int → getLibraryChapters():
-     * List<Entity>, on the theory that a bare Int return from @Query was
-     * the ambiguous shape Room misrouted) did NOT resolve the error — the
-     * exact same SQLiteException still fires, now from getLibraryChapters
-     * itself, which has no such ambiguity. That disproves the "Int return
-     * type" theory. Since there's no adb/logcat available here, the only
-     * way to see the actual throw site is to put the stack trace itself
-     * on screen — hence this wrapper. Once the real throw site is visible
-     * in a screenshot, this can shrink back down to a plain message.
+     * Root cause of the earlier "Queries can be performed using
+     * SQLiteDatabase query or rawQuery methods only" crash traced (via
+     * full stack trace) to MasterDatabase's onCreate() — a raw
+     * `execSQL("PRAGMA journal_mode=WAL;")`, not anything in this DAO
+     * call. Fixed there (see MasterDatabase.kt). getLibraryChapters()
+     * itself was fine all along. Kept a short wrapper here (rather than
+     * none) since there's no adb/logcat access — if isDownloaded ever
+     * fails again for a different reason, naming the call directly in
+     * the on-screen message is still cheap insurance.
      */
     suspend fun isDownloaded(context: Context, bookId: String): Boolean = withContext(Dispatchers.IO) {
         try {
             MasterDatabase.getInstance(context).masterDao().getLibraryChapters(bookId).isNotEmpty()
         } catch (e: Exception) {
-            val trace = e.stackTrace.take(12).joinToString("\n") { "  at $it" }
-            var cause = e.cause
-            val causeTrace = StringBuilder()
-            var depth = 0
-            while (cause != null && depth < 3) {
-                causeTrace.append("\nCaused by ${cause.javaClass.name}: ${cause.message}\n")
-                causeTrace.append(cause.stackTrace.take(8).joinToString("\n") { "  at $it" })
-                cause = cause.cause
-                depth++
-            }
             throw IllegalStateException(
-                "getLibraryChapters(bookId=$bookId) — ${e.javaClass.name}: ${e.message}\n$trace$causeTrace",
+                "getLibraryChapters(bookId=$bookId) failed — ${e.javaClass.simpleName}: ${e.message}",
                 e
             )
         }
