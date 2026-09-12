@@ -18,12 +18,16 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.kyronix.swadhyaa.data.repository.Adhyay
+import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.ui.theme.AppColors
+import com.kyronix.swadhyaa.ui.theme.FontManager
 import com.kyronix.swadhyaa.ui.gesture.attachSwipeNavigation
 import com.kyronix.swadhyaa.data.repository.MahabharataRepository
 import com.kyronix.swadhyaa.data.repository.ParbaInfo
 import com.kyronix.swadhyaa.data.repository.Upakhyan
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * Mahabharata Reader.
@@ -58,11 +62,24 @@ class MahabharataActivity : AppCompatActivity() {
     private lateinit var btnPrev: Button
     private lateinit var btnNext: Button
 
+    // BUGFIX (font not applying app-wide): this screen never consulted the
+    // user's font settings — every TextView used the hardcoded system font
+    // regardless of what was chosen in Settings. Resolved the same way
+    // ReaderActivity/GitaActivity already do it.
+    private lateinit var banglaTypeface: Typeface
+
     private val density by lazy { resources.displayMetrics.density }
     private fun dp(v: Int) = (v * density).toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Resolve the Bangla font from user settings before UI is built.
+        // (No Devanagari/Sanskrit text on this screen — Mahabharata content
+        // here is the Bangla prose translation only.)
+        val settings = runBlocking { SettingsRepository(this@MahabharataActivity).settingsFlow.first() }
+        banglaTypeface = FontManager.banglaTypeface(this, settings.banglaFont)
+
         val root = buildUi()
         root.attachSwipeNavigation(onSwipeLeft = { vm.nextAdhyay() }, onSwipeRight = { vm.prevAdhyay() })
         setContentView(root)
@@ -282,6 +299,7 @@ class MahabharataActivity : AppCompatActivity() {
                 setTextColor(IVORY)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
                 setLineSpacing(0f, 1.4f)
+                typeface = banglaTypeface
             })
             contentArea.addView(card, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
