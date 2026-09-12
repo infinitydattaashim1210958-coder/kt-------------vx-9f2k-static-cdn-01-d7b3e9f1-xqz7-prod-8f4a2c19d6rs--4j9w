@@ -193,8 +193,18 @@ interface MasterDao {
     )
     suspend fun getLibraryRefs(bookId: String, chapterId: String): List<LibraryBookRefEntity>
 
-    @Query("SELECT COUNT(*) FROM library_book_chapters WHERE book_id = :bookId")
-    suspend fun getLibraryChapterCount(bookId: String): Int
+    // BUGFIX: removed getLibraryChapterCount() — it was
+    // `@Query("SELECT COUNT(*) FROM library_book_chapters WHERE book_id = :bookId") suspend fun ...(): Int`.
+    // A bare Int/Long return type from @Query is the one shape Room's
+    // codegen can read as EITHER "scalar SELECT result" OR "rows affected
+    // by an update/delete" — and this was the only query in this whole
+    // DAO with that shape (everything else returns List<Entity>/an
+    // entity/Unit, which Room can only ever treat as read-only). It's
+    // also the only Library DAO call reachable from the catalog screen —
+    // matching exactly where "Queries can be performed using
+    // SQLiteDatabase query or rawQuery methods only." showed up. Callers
+    // now use getLibraryChapters(bookId).isNotEmpty() instead (see
+    // LibraryDbBookRepository.isDownloaded), which has no such ambiguity.
 
     /**
      * FTS query text must already be escaped by the caller (see
