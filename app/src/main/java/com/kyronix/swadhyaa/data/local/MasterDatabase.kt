@@ -52,18 +52,54 @@ import com.kyronix.swadhyaa.data.local.entity.VedaBhashyaContentEntity
  * swadhyay_master.db file on disk from before this pass (i.e. had ever
  * opened this database even once) would fail that validation with
  * `IllegalStateException: Room cannot verify the data integrity...` the
- * moment MasterDatabase.getInstance() is next called. That call happens
- * exactly once in this whole app — from LibraryDbBookRepository.isDownloaded(),
- * i.e. the instant the user opens Digital Library — and nothing in that
- * call chain catches the exception, so it crashed the app ("keeps
- * stopping"). Fixed by bumping version to 2 and adding MIGRATION_1_2 below,
- * which creates exactly the tables/index Room now expects instead of
- * silently redefining the whole database.
+ * moment MasterDatabase.getInstance() is next called. Fixed by bumping
+ * version to 2 and adding MIGRATION_1_2 below, which creates exactly the
+ * tables/index Room now expects instead of silently redefining the whole
+ * database.
  *
  * ⚠ Going forward: any time a new @Entity is added to (or a column/index is
  * changed in) the `entities` list below, `version` MUST be bumped and a
  * matching Migration MUST be added here — otherwise this exact crash comes
  * back for anyone who already has the app installed.
+ *
+ * ── PRAGMA-INSIDE-TRANSACTION BUGFIXES ──
+ * Room's onCreate() callback runs its entire body inside one implicit
+ * transaction (so schema creation is atomic). SQLite refuses to change
+ * "safety level" pragmas — journal_mode, synchronous — while a transaction
+ * is open ("Safety level may not be changed inside a transaction"), and
+ * silently no-ops foreign_keys in the same situation. Two of these were
+ * previously sent via execSQL() inside onCreate() and both failed the
+ * moment onCreate() actually ran for the first time (it never had, until
+ * the schema-version crash above was fixed):
+ *   - journal_mode=WAL additionally throws its own separate error even
+ *     outside a transaction, because it's the one pragma that always
+ *     returns its resulting value as a row — fixed by using Room's own
+ *     .setJournalMode() builder option instead of raw SQL at all.
+ *   - synchronous=NORMAL and foreign_keys=ON are fixed by moving them to
+ *     onOpen(), which runs after onCreate/migration's transaction has
+ *     already committed, and — usefully for foreign_keys specifically —
+ *     on every single database open, which it needs anyway since SQLite
+ *     doesn't persist that pragma across connections the way it persists
+ *     journal_mode in the db file.
+ * This whole family of bugs is already documented, independently, in
+ * master-db.js's own comments (the JS reference implementation this was
+ * ported from) — that file already solved it with a transaction-free
+ * "bare statement" path. These fixes are the Room-idiomatic equivalent.
+ *
+ * ── FTS5-UNAVAILABLE-ON-DEVICE BUGFIX ──
+ * Some Android builds' system SQLite has no FTS5 module compiled in at
+ * all ("no such module: fts5") — a device/OS capability gap, not a bug in
+ * this SQL. FTS5 has only been reliably bundled since Android 11; older
+ * versions and some OEM builds never compiled it in. Since creating the
+ * FTS5 table used to happen unguarded inside onCreate(), hitting this on
+ * such a device made MasterDatabase.getInstance() itself throw — breaking
+ * Digital Library entirely, not just search. Table creation is now
+ * wrapped in try/catch (both onCreate and the migration), and
+ * MasterDao's installLibraryDbBook/removeLibraryDbBook also wrap their
+ * FTS reads/writes for the same reason (see MasterDao.kt) — library book
+ * search already has a LIKE-based fallback (searchLibraryBookLike) for
+ * exactly this situation; the rest of the app just needs to not crash
+ * before reaching it.
  */
 @Database(
     entities = [
@@ -101,46 +137,12 @@ abstract class MasterDatabase : RoomDatabase() {
                 MasterDatabase::class.java,
                 DB_NAME
             )
-                // BUGFIX (root cause of the "Queries can be performed using
-                // SQLiteDatabase query or rawQuery methods only" error —
-                // found via the full stack trace, which pointed at
-                // onCreate → execSQL("PRAGMA journal_mode=WAL;")):
-                // PRAGMA journal_mode=X is a special case in SQLite — it
-                // ALWAYS returns the resulting mode as a one-row result
-                // set, even in "assignment" form (unlike `synchronous` or
-                // `foreign_keys`, which don't). execSQL() runs statements
-                // through Android's "no result set expected" path, so it
-                // throws exactly this error the moment it gets a row back.
-                // This was pre-existing code — it just never ran
-                // successfully before, since onCreate never got a chance
-                // to fire until the schema-version crash was fixed. Fixed
-                // by asking Room itself to enable WAL (its own builder
-                // option, which does this correctly) instead of sending
-                // the PRAGMA as raw SQL.
+                // journal_mode=WAL must go through Room's own builder option,
+                // not raw SQL — see the class-level doc above.
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 .addCallback(object : Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
                         super.onCreate(db)
-                        // BUGFIX #2 (same family as the journal_mode fix
-                        // above, found the same way — via the next
-                        // stack trace): `synchronous` is also a "safety
-                        // level" pragma, and SQLite refuses to change
-                        // those while a transaction is open —
-                        // "Safety level may not be changed inside a
-                        // transaction". Room's onCreate() callback runs
-                        // its entire body inside one implicit
-                        // transaction (that's how Room guarantees the
-                        // schema is created atomically), so execSQL
-                        // here always failed once it was actually
-                        // reached — it just never had been, for the
-                        // same reason as the journal_mode bug. Moved to
-                        // onOpen() below, which runs after that
-                        // transaction has already committed.
-                        //
-                        // DDL is unaffected by this restriction (CREATE
-                        // TABLE/INDEX/VIRTUAL TABLE are all fine inside
-                        // a transaction), so the FTS5 table stays here.
-                        //
                         // Room only creates tables for its declared @Entity
                         // classes — it has no concept of FTS5 virtual
                         // tables, so this one (needed for library book
@@ -154,7 +156,15 @@ abstract class MasterDatabase : RoomDatabase() {
                         // the CURRENT version — a device migrating up from
                         // v1 never gets this callback (see MIGRATION_1_2,
                         // which creates this same table by hand too).
-                        db.execSQL(FTS_TABLE_SQL)
+                        //
+                        // Wrapped: see the FTS5-unavailable-on-device
+                        // bugfix note in the class-level doc above.
+                        try {
+                            db.execSQL(FTS_TABLE_SQL)
+                        } catch (e: Exception) {
+                            // No FTS5 module on this device — library book
+                            // search will use the LIKE fallback instead.
+                        }
                     }
 
                     override fun onOpen(db: SupportSQLiteDatabase) {
@@ -165,7 +175,7 @@ abstract class MasterDatabase : RoomDatabase() {
                         // needs: SQLite does not persist that pragma in the
                         // db file the way it persists journal_mode, so it
                         // has to be re-applied per connection, not just once
-                        // at creation time.
+                        // at creation time. See class-level doc above.
                         db.execSQL("PRAGMA synchronous=NORMAL;")
                         db.execSQL("PRAGMA foreign_keys=ON;")
                     }
@@ -243,7 +253,14 @@ abstract class MasterDatabase : RoomDatabase() {
                         "ON `library_book_refs` (`book_id`, `chapter_id`, `para_seq`)"
                 )
 
-                db.execSQL(FTS_TABLE_SQL)
+                // Wrapped: see the FTS5-unavailable-on-device bugfix note
+                // in the class-level doc above (same guard as onCreate).
+                try {
+                    db.execSQL(FTS_TABLE_SQL)
+                } catch (e: Exception) {
+                    // No FTS5 module on this device — LIKE fallback will
+                    // handle search.
+                }
             }
         }
 
