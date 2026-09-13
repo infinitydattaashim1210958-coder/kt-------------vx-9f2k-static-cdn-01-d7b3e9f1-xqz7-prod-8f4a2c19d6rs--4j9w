@@ -2,15 +2,9 @@ package com.kyronix.swadhyaa
 
 import android.app.Application
 import android.util.Log
-import com.kyronix.swadhyaa.data.local.DatabaseVerifier
-import com.kyronix.swadhyaa.data.migration.LegacyMigrationEngine
 import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.ui.theme.AppColors
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -30,24 +24,24 @@ import kotlinx.coroutines.runBlocking
  *    main thread during an Activity's own lifecycle, which this is not.
  *    Falls back to the default (gold) accent on any read failure rather
  *    than crashing app startup over a cosmetic setting.
- * 1. Run integrity verification (row counts) against the bundled assets —
- *    catches a corrupted/mismatched asset early, in Logcat, before any
- *    screen tries to query it.
- * 2. Run the legacy-data migration engine (RISK_REGISTER.md R3), only if
- *    it hasn't already completed for the current schema version. Runs
- *    after step 1 because Veda-mantra hash resolution during migration
- *    needs CoreDatabase to be openable. Safe to run on every launch
- *    (no-ops immediately once done) and safe on a fresh install (no-ops
- *    when no legacy data is found).
+ *
+ * BUGFIX/CHANGE: integrity verification (DatabaseVerifier) and the
+ * legacy-data migration engine (LegacyMigrationEngine, RISK_REGISTER.md
+ * R3) used to run right here, fire-and-forget in a background
+ * CoroutineScope with no UI tied to them at all — meaning a fast device
+ * could reach a Veda-reading screen before verification/migration had
+ * actually finished, and neither ever surfaced to the user in any way
+ * (Logcat only). Both moved to SplashActivity (the new LAUNCHER activity
+ * — see AndroidManifest.xml), which now genuinely waits on them before
+ * proceeding to ShellActivity, and shows "নমস্কার, ডাটাবেস লোড হচ্ছে…"
+ * while they run. See SplashActivity's doc comment for the detail.
  *
  * Hard database gate remains the unit test in CI (DatabaseVerificationTest),
- * which now checks the exact same file this runtime check does — both read
+ * which checks the exact same file this runtime check does — both read
  * from the same source (app/src/main/assets/databases/), not disconnected
  * copies.
  */
 class SwadhyayApp : Application() {
-
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
@@ -58,26 +52,6 @@ class SwadhyayApp : Application() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to apply stored accent, using default", e)
             AppColors.applyAccent("gold")
-        }
-
-        appScope.launch {
-            val report = DatabaseVerifier.verify(this@SwadhyayApp)
-            if (!report.ok) {
-                Log.e(TAG, "DATABASE INTEGRITY GATE FAILED: $report")
-                // Do not attempt migration against a DB that failed its
-                // own integrity check — Veda-mantra hash resolution would
-                // just fail too, and noisily so. Migration will retry on
-                // the next launch (it hasn't been marked done).
-                return@launch
-            }
-            Log.i(TAG, "DATABASE INTEGRITY GATE PASSED: $report")
-
-            val migration = LegacyMigrationEngine.runIfNeeded(this@SwadhyayApp)
-            if (migration.errors.isNotEmpty()) {
-                Log.e(TAG, "LEGACY MIGRATION completed with errors: $migration")
-            } else {
-                Log.i(TAG, "LEGACY MIGRATION: $migration")
-            }
         }
     }
 
