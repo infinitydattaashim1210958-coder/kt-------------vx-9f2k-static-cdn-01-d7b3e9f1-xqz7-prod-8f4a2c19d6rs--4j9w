@@ -249,12 +249,28 @@ interface MasterDao {
         deleteLibraryRefs(bookId)
         deleteLibraryParagraphs(bookId)
         deleteLibraryChapters(bookId)
-        deleteLibraryParagraphsFts(bookId)
+        // BUGFIX: on a device with no FTS5 module, MasterDatabase never
+        // managed to create library_book_paragraphs_fts (see
+        // MasterDatabase.kt) — so this DELETE would throw "no such table"
+        // and abort the whole transaction, breaking book installs
+        // entirely on those devices, not just search. Best-effort: the
+        // fts table is a search accelerator, not the source of truth.
+        try {
+            deleteLibraryParagraphsFts(bookId)
+        } catch (e: Exception) {
+            // No FTS5 table on this device — nothing to clear.
+        }
 
         insertLibraryChapters(chapters)
         insertLibraryParagraphs(paragraphs)
         insertLibraryRefs(refs)
-        rebuildLibraryParagraphsFts(bookId)
+        try {
+            rebuildLibraryParagraphsFts(bookId)
+        } catch (e: Exception) {
+            // No FTS5 table on this device — search will use the LIKE
+            // fallback (searchLibraryBookLike) instead; chapters/
+            // paragraphs/refs above are already inserted regardless.
+        }
 
         upsertInstalledPackage(pkg)
     }
@@ -264,7 +280,11 @@ interface MasterDao {
         deleteLibraryRefs(bookId)
         deleteLibraryParagraphs(bookId)
         deleteLibraryChapters(bookId)
-        deleteLibraryParagraphsFts(bookId)
+        try {
+            deleteLibraryParagraphsFts(bookId)
+        } catch (e: Exception) {
+            // No FTS5 table on this device — nothing to clear.
+        }
         deleteInstalledPackage(packageId)
     }
 }
