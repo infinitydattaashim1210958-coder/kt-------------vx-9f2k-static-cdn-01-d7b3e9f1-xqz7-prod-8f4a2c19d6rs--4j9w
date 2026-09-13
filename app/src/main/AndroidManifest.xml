@@ -12,11 +12,15 @@
         android:theme="@style/Theme.Swadhyay">
         <activity
             android:name=".presentation.shell.ShellActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Swadhyay" />
+        <activity
+            android:name=".presentation.splash.SplashActivity"
             android:exported="true"
             android:theme="@style/Theme.Swadhyay">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
+              <action android:name="android.intent.action.MAIN" />
+              <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
         <activity
