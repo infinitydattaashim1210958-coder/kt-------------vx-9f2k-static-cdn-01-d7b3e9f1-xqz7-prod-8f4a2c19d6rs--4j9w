@@ -36,6 +36,10 @@
             android:exported="false"
             android:theme="@style/Theme.Swadhyay" />
         <activity
+            android:name=".presentation.library.LibraryHtmlBookReaderActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Swadhyay" />
+        <activity
             android:name=".presentation.ramayana.RamayanaActivity"
             android:exported="false"
             android:theme="@style/Theme.Swadhyay" />
