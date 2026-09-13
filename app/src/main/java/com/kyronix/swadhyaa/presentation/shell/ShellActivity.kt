@@ -27,6 +27,7 @@ import com.kyronix.swadhyaa.data.repository.LibraryBookInfo
 import com.kyronix.swadhyaa.data.repository.LibraryBookStatus
 import com.kyronix.swadhyaa.data.repository.LibraryBookWithStatus
 import com.kyronix.swadhyaa.presentation.library.LibraryDbBookReaderActivity
+import com.kyronix.swadhyaa.presentation.library.LibraryHtmlBookReaderActivity
 import com.kyronix.swadhyaa.domain.model.VedaSummary
 import com.kyronix.swadhyaa.presentation.mahabharata.MahabharataActivity
 import com.kyronix.swadhyaa.presentation.gita.GitaActivity
