@@ -26,10 +26,14 @@ data class DownloadedHtmlBook(
  * "html"-type library books (the majority of the catalog — see
  * LibraryManifest doc). Matches lib.js's downloadBook/getManifest/
  * deleteBook exactly for this type: download saves the real HTML file
- * locally; there is no in-app reader for it at all — legacy opens it in
- * the system browser via an Intent, preserving the original page's own
- * interactivity (search, tabs, etc.) rather than re-implementing it.
- * LibraryActivity does the same via getShareableUri() + ACTION_VIEW.
+ * locally.
+ *
+ * Reading happens in-app now, in LibraryHtmlBookReaderActivity (a WebView
+ * loading getShareableUri() directly) — not via ACTION_VIEW. That used to
+ * hand off to Android's "Open with" chooser (Chrome, Docs, a bare HTML
+ * viewer, etc.), which meant leaving স্বাধ্যায় to read a downloaded book.
+ * getShareableUri() is kept as-is and still used, just consumed by our own
+ * WebView instead of an external Intent.
  */
 object LibraryHtmlBookRepository {
 
