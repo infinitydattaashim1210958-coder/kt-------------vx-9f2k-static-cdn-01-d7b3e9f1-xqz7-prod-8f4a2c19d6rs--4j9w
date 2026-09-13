@@ -428,14 +428,11 @@ class ShellActivity : AppCompatActivity() {
                     .putExtra(LibraryDbBookReaderActivity.EXTRA_BOOK_ID, book.id)
                     .putExtra(LibraryDbBookReaderActivity.EXTRA_BOOK_TITLE, book.title)
             )
-            else -> lifecycleScope.launch {
-                val uri = LibraryRepository.getHtmlShareableUri(this@ShellActivity, book)
-                if (uri != null) {
-                    startActivity(Intent(Intent.ACTION_VIEW, uri))
-                } else {
-                    Toast.makeText(this@ShellActivity, "ফাইল খোলা যাচ্ছে না", Toast.LENGTH_SHORT).show()
-                }
-            }
+            else -> startActivity(
+                Intent(this, LibraryHtmlBookReaderActivity::class.java)
+                    .putExtra(LibraryHtmlBookReaderActivity.EXTRA_BOOK_ID, book.id)
+                    .putExtra(LibraryHtmlBookReaderActivity.EXTRA_BOOK_TITLE, book.title)
+            )
         }
     }
 
