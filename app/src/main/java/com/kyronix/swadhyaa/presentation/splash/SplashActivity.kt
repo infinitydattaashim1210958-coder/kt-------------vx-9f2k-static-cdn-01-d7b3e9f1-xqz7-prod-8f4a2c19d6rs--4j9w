@@ -47,6 +47,9 @@ import kotlin.random.Random
  */
 class SplashActivity : AppCompatActivity() {
 
+    private val density by lazy { resources.displayMetrics.density }
+    private fun dp(v: Int) = (v * density).toInt()
+
     private var videoDone = false
     private var workDone = false
     private var navigated = false
@@ -110,11 +113,7 @@ class SplashActivity : AppCompatActivity() {
         return videoContainer
     }
 
-    private fun buildWelcomeLayer(): LinearLayout {
-        val density = resources.displayMetrics.density
-        fun dp(v: Int) = (v * density).toInt()
-
-        val col = LinearLayout(this).apply {
+    private fun buildWelcomeLayer(): LinearLayout {        val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(AppColors.bg)
