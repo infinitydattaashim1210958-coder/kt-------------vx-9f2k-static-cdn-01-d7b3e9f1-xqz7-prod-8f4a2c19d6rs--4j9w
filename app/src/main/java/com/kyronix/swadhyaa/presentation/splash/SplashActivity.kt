@@ -2,16 +2,14 @@ package com.kyronix.swadhyaa.presentation.splash
 
 import android.content.Intent
 import android.graphics.Color
-import android.net.Uri
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
-import android.view.animation.AccelerateInterpolator
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.VideoView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.kyronix.swadhyaa.R
@@ -20,47 +18,53 @@ import com.kyronix.swadhyaa.data.migration.LegacyMigrationEngine
 import com.kyronix.swadhyaa.presentation.shell.ShellActivity
 import com.kyronix.swadhyaa.ui.theme.AppColors
 import com.kyronix.swadhyaa.ui.theme.FontManager
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.random.Random
 
 /**
  * App entry point (the LAUNCHER activity — see AndroidManifest.xml;
- * ShellActivity no longer holds that role). Plays the KIG brand intro
- * video, then slides it away to reveal a welcome/loading screen ("ও৩ম্…
- * database loading") while real startup work runs, then proceeds to
- * ShellActivity.
+ * ShellActivity no longer holds that role).
+ *
+ * Sequence: KIG logo (white bg, res/drawable/kig_logo.webp) for
+ * LOGO_DURATION_MS, cross-fades into the "ও৩ম্ / নমস্কার, ডাটাবেস লোড
+ * হচ্ছে…" welcome screen, which stays up for at least
+ * WELCOME_MIN_DURATION_MS — then proceeds to ShellActivity once that
+ * minimum has elapsed AND real startup work has actually finished,
+ * whichever is later.
+ *
+ * CHANGE (was video-based): the KIG intro video approach was replaced
+ * with this fixed-timing static-logo version per updated instructions —
+ * no VideoView, no res/raw video asset needed anymore.
  *
  * That startup work — DatabaseVerifier.verify() + LegacyMigrationEngine.
  * runIfNeeded() — used to run fire-and-forget in SwadhyayApp.onCreate(),
  * with no UI tied to it at all (see that file's history). Moved here so
- * "ডাটাবেস লোড হচ্ছে…" is describing something actually happening, not a
- * fixed timer — and so a slow device genuinely can't reach a
+ * "ডাটাবেস লোড হচ্ছে…" is describing something actually happening, not
+ * just a fixed timer — and so a slow device genuinely can't reach a
  * Veda-reading screen before verification/migration finishes, which the
- * old fire-and-forget approach didn't actually guarantee.
- *
- * The video and the startup work run concurrently (not sequentially) —
- * proceeding to ShellActivity waits on whichever finishes last, via the
- * two-flag videoDone/workDone check in maybeProceed(). In practice the
- * video (a few seconds) takes longer than the startup queries, so the
- * loading text is rarely on screen for long — that's intentional, not a
- * missing progress indicator.
+ * old fire-and-forget approach didn't actually guarantee. It runs
+ * concurrently with the logo/welcome timing, not after it — proceeding
+ * waits on whichever finishes last (see maybeProceed()).
  */
 class SplashActivity : AppCompatActivity() {
 
     private val density by lazy { resources.displayMetrics.density }
     private fun dp(v: Int) = (v * density).toInt()
 
-    private var videoDone = false
     private var workDone = false
+    private var minDisplayDone = false
     private var navigated = false
 
-    private lateinit var videoContainer: FrameLayout
-    private lateinit var videoView: VideoView
+    private lateinit var logoLayer: View
+    private lateinit var welcomeLayer: View
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildUi())
 
+        // Real startup work — runs in parallel with the fixed logo/
+        // welcome timing below, not after it.
         lifecycleScope.launch {
             val report = DatabaseVerifier.verify(this@SplashActivity)
             if (report.ok) {
@@ -74,46 +78,54 @@ class SplashActivity : AppCompatActivity() {
             maybeProceed()
         }
 
-        videoView.setOnCompletionListener { onVideoFinished() }
-        videoView.setOnErrorListener { _, _, _ -> onVideoFinished(); true }
-        videoView.setOnPreparedListener { it.isLooping = false }
-        val uri = Uri.parse("android.resource://$packageName/${R.raw.kig_intro}")
-        videoView.setVideoURI(uri)
-        videoView.start()
+        // Fixed splash timing: logo for 3s, cross-fade, welcome for
+        // another 3s minimum.
+        lifecycleScope.launch {
+            delay(LOGO_DURATION_MS)
+            crossFadeToWelcome()
+            delay(WELCOME_MIN_DURATION_MS)
+            minDisplayDone = true
+            maybeProceed()
+        }
     }
 
     private fun buildUi(): FrameLayout {
         val root = FrameLayout(this).apply {
             setBackgroundColor(AppColors.bg)
         }
-
-        root.addView(buildWelcomeLayer())
-        root.addView(buildVideoLayer())
-
+        welcomeLayer = buildWelcomeLayer().apply {
+            visibility = View.INVISIBLE // laid out immediately, revealed at cross-fade
+        }
+        logoLayer = buildLogoLayer()
+        root.addView(welcomeLayer)
+        root.addView(logoLayer)
         return root
     }
 
-    private fun buildVideoLayer(): FrameLayout {
-        videoContainer = FrameLayout(this).apply {
-            setBackgroundColor(AppColors.black)
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
-            )
-            // Tap to skip straight to the welcome screen — a five-second
-            // brand intro shouldn't be a wall between the user and the
-            // app on every single launch.
-            setOnClickListener { if (!videoDone) onVideoFinished() }
-        }
-        videoView = VideoView(this).apply {
+    private fun buildLogoLayer(): View {
+        val layer = FrameLayout(this).apply {
+            setBackgroundColor(Color.WHITE)
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
             )
         }
-        videoContainer.addView(videoView)
-        return videoContainer
+        val logo = ImageView(this).apply {
+            setImageResource(R.drawable.kig_logo)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.CENTER
+            ).apply {
+                val pad = dp(48)
+                setMargins(pad, pad, pad, pad)
+            }
+        }
+        layer.addView(logo)
+        return layer
     }
 
-    private fun buildWelcomeLayer(): LinearLayout {        val col = LinearLayout(this).apply {
+    private fun buildWelcomeLayer(): LinearLayout {
+        val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(AppColors.bg)
@@ -138,6 +150,13 @@ class SplashActivity : AppCompatActivity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 64f)
             gravity = Gravity.CENTER
             setShadowLayer(28f, 0f, 0f, AppColors.goldBright)
+            // Devanagari font, matching how ReaderActivity/GitaActivity/
+            // etc. resolve it from Settings elsewhere in the app (see
+            // FontManager). Splash renders before Settings would
+            // normally be read anywhere else, so this uses FontManager's
+            // built-in default typeface directly rather than blocking
+            // startup on a DataStore read here.
+            typeface = FontManager.devanagariEntry("noto_serif_devanagari").typeface(this@SplashActivity)
         }
         col.addView(om)
 
@@ -149,13 +168,6 @@ class SplashActivity : AppCompatActivity() {
             setPadding(0, dp(14), 0, 0)
         }
         col.addView(subtitle)
-
-        // Devanagari font, matching how ReaderActivity/GitaActivity/etc.
-        // resolve it from Settings elsewhere in the app (see FontManager).
-        // Splash renders before Settings would normally be read anywhere
-        // else, so this uses FontManager's built-in default typeface
-        // directly rather than blocking startup on a DataStore read here.
-        om.typeface = FontManager.devanagariEntry("noto_serif_devanagari").typeface(this)
 
         dotLayer.post { scatterDots(dotLayer, dp(3), dp(5)) }
 
@@ -187,26 +199,28 @@ class SplashActivity : AppCompatActivity() {
         }
     }
 
-    private fun onVideoFinished() {
-        if (videoDone) return
-        videoContainer.animate()
-            .translationY(videoContainer.height.toFloat())
+    private fun crossFadeToWelcome() {
+        welcomeLayer.alpha = 0f
+        welcomeLayer.visibility = View.VISIBLE
+        welcomeLayer.animate().alpha(1f).setDuration(CROSSFADE_MS).start()
+        logoLayer.animate()
             .alpha(0f)
-            .setDuration(500)
-            .setInterpolator(AccelerateInterpolator())
-            .withEndAction {
-                videoContainer.visibility = View.GONE
-                videoDone = true
-                maybeProceed()
-            }
+            .setDuration(CROSSFADE_MS)
+            .withEndAction { logoLayer.visibility = View.GONE }
             .start()
     }
 
     private fun maybeProceed() {
-        if (videoDone && workDone && !navigated) {
+        if (workDone && minDisplayDone && !navigated) {
             navigated = true
             startActivity(Intent(this, ShellActivity::class.java))
             finish()
         }
+    }
+
+    companion object {
+        private const val LOGO_DURATION_MS = 3000L
+        private const val WELCOME_MIN_DURATION_MS = 3000L
+        private const val CROSSFADE_MS = 600L
     }
 }
