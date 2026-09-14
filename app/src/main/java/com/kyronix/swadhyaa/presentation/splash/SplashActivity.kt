@@ -104,7 +104,7 @@ class SplashActivity : AppCompatActivity() {
 
     private fun buildLogoLayer(): View {
         val layer = FrameLayout(this).apply {
-            setBackgroundColor(Color.WHITE)
+            setBackgroundColor(Color.BLACK)
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT
             )
@@ -145,7 +145,7 @@ class SplashActivity : AppCompatActivity() {
         col.addView(dotLayer, 0)
 
         val om = TextView(this).apply {
-            text = "ও৩ম্"
+            text = "ओ३म्"
             setTextColor(AppColors.gold)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 64f)
             gravity = Gravity.CENTER
