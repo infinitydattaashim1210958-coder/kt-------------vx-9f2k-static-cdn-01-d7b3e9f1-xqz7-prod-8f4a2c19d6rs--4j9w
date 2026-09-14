@@ -149,7 +149,17 @@ class SplashActivity : AppCompatActivity() {
             setTextColor(AppColors.gold)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 64f)
             gravity = Gravity.CENTER
-            setShadowLayer(28f, 0f, 0f, AppColors.goldBright)
+            // BUGFIX: setShadowLayer() on a hardware-accelerated View can
+            // render the WHOLE glyph invisible (not just the glow) on a
+            // lot of real devices/GPU driver combos, especially with a
+            // large blur radius — that's what was showing as a plain
+            // black screen where ओ३म् should have been (the dark
+            // background was always fine; only the text itself wasn't
+            // drawing). Forcing software rendering for this one small
+            // view makes setShadowLayer() reliable everywhere; also
+            // trimmed the radius down a bit as extra margin.
+            setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            setShadowLayer(16f, 0f, 0f, AppColors.goldBright)
             // Devanagari font, matching how ReaderActivity/GitaActivity/
             // etc. resolve it from Settings elsewhere in the app (see
             // FontManager). Splash renders before Settings would
