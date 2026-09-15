@@ -35,6 +35,7 @@ import com.kyronix.swadhyaa.presentation.ramayana.RamayanaActivity
 import com.kyronix.swadhyaa.presentation.reader.ReaderActivity
 import com.kyronix.swadhyaa.ui.theme.AppColors
 import com.kyronix.swadhyaa.ui.theme.FontManager
+import com.kyronix.swadhyaa.ui.theme.GlowBox
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -165,13 +166,13 @@ class ShellActivity : AppCompatActivity() {
     private inline fun card(block: LinearLayout.() -> Unit): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(AppColors.surface)
             setPadding(dp(14), dp(14), dp(14), dp(14))
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(10) }
+            ).apply { bottomMargin = dp(12) }
             layoutParams = lp
+            GlowBox.applyTo(this, GlowBox.panel(this@ShellActivity, color = AppColors.gold, fillColor = AppColors.surface))
             block()
         }
     }
@@ -258,11 +259,15 @@ class ShellActivity : AppCompatActivity() {
             val tile = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setBackgroundColor(AppColors.surface)
                 setPadding(dp(8), dp(16), dp(8), dp(16))
                 alpha = if (enabled) 1f else 0.4f
                 setOnClickListener { onHomeSectionTap(section) }
             }
+            GlowBox.applyTo(
+                tile,
+                GlowBox.panel(this, color = if (enabled) AppColors.gold else AppColors.muted, fillColor = AppColors.surface, cornerRadiusDp = 12f),
+                haloDp = 6
+            )
             tile.addView(TextView(this).apply {
                 text = section.icon
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
@@ -389,10 +394,10 @@ class ShellActivity : AppCompatActivity() {
             val actionBtn = TextView(this@ShellActivity).apply {
                 text = if (downloaded) "পড়ুন" else "ডাউনলোড"
                 setTextColor(AppColors.bg)
-                setBackgroundColor(AppColors.gold)
                 setPadding(dp(18), dp(8), dp(18), dp(8))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             }
+            GlowBox.applyTo(actionBtn, GlowBox.chip(this@ShellActivity, color = AppColors.gold, cornerRadiusDp = 10f, filled = true))
 
             actionBtn.setOnClickListener {
                 if (downloaded) {
@@ -488,9 +493,9 @@ class ShellActivity : AppCompatActivity() {
             hint = "সন্ধান… (অগ্নি / तपः …)"
             setHintTextColor(AppColors.muted)
             setTextColor(AppColors.ivory)
-            setBackgroundColor(AppColors.elevated)
             setPadding(dp(12), dp(12), dp(12), dp(12))
         }
+        GlowBox.applyTo(input, GlowBox.panel(this, color = AppColors.border, fillColor = AppColors.elevated, cornerRadiusDp = 12f))
         content.addView(input)
         val results = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -569,13 +574,13 @@ class ShellActivity : AppCompatActivity() {
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(AppColors.surface)
             setPadding(dp(14), dp(14), dp(14), dp(14))
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(2) }
+            ).apply { bottomMargin = dp(6) }
             layoutParams = lp
+            GlowBox.applyTo(this, GlowBox.panel(this@ShellActivity, color = AppColors.muted, fillColor = AppColors.surface, cornerRadiusDp = 10f))
             addView(TextView(this@ShellActivity).apply {
                 text = "$icon  $label"
                 setTextColor(AppColors.ivory)
@@ -993,9 +998,9 @@ class ShellActivity : AppCompatActivity() {
                 text = "শুধু ডিজিটাল লাইব্রেরির বই এখানে একসঙ্গে মোছা যায়। ভাষ্য/পর্ব প্যাক ওপরের তালিকা থেকে আলাদাভাবে মুছুন।"
                 setTextColor(AppColors.muted); setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f); setPadding(0, 0, 0, dp(12))
             })
-            addView(TextView(this@ShellActivity).apply {
+            val clearAllBtn = TextView(this@ShellActivity).apply {
                 text = "🗑  Clear All Downloaded Books"
-                setTextColor(AppColors.bg); setBackgroundColor(AppColors.vermilion)
+                setTextColor(AppColors.bg)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f); typeface = Typeface.DEFAULT_BOLD
                 gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(12))
                 setOnClickListener {
@@ -1003,7 +1008,9 @@ class ShellActivity : AppCompatActivity() {
                     dir.listFiles()?.forEach { it.delete() }
                     showSettingsScreen("library_storage")
                 }
-            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            }
+            GlowBox.applyTo(clearAllBtn, GlowBox.chip(this@ShellActivity, color = AppColors.vermilion, cornerRadiusDp = 10f, filled = true))
+            addView(clearAllBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         })
     }
 
@@ -1084,11 +1091,13 @@ class ShellActivity : AppCompatActivity() {
             })
         })
 
-        content.addView(TextView(this).apply {
-            text = "💾 Save Preferences"; setTextColor(Color.BLACK); setBackgroundColor(AppColors.gold)
+        val savePrefsBtn = TextView(this).apply {
+            text = "💾 Save Preferences"; setTextColor(Color.BLACK)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f); typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER; setPadding(0, dp(14), 0, dp(14))
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
+        }
+        GlowBox.applyTo(savePrefsBtn, GlowBox.chip(this, color = AppColors.gold, cornerRadiusDp = 12f, filled = true))
+        content.addView(savePrefsBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
     }
 
     private suspend fun renderSearchSettings() {
@@ -1118,17 +1127,21 @@ class ShellActivity : AppCompatActivity() {
         content.addView(settingsSection("🕒  RECENT SEARCHES"))
         content.addView(card {
             addView(TextView(this@ShellActivity).apply { text = "No recent searches"; setTextColor(AppColors.muted); setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f); setPadding(0, 0, 0, dp(10)) })
-            addView(TextView(this@ShellActivity).apply {
-                text = "Clear History"; setTextColor(AppColors.bg); setBackgroundColor(AppColors.vermilion)
+            val clearHistoryBtn = TextView(this@ShellActivity).apply {
+                text = "Clear History"; setTextColor(AppColors.bg)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f); typeface = Typeface.DEFAULT_BOLD
                 setPadding(dp(14), dp(8), dp(14), dp(8))
-            })
+            }
+            GlowBox.applyTo(clearHistoryBtn, GlowBox.chip(this@ShellActivity, color = AppColors.vermilion, cornerRadiusDp = 10f, filled = true))
+            addView(clearHistoryBtn)
         })
-        content.addView(TextView(this).apply {
-            text = "💾 Save Settings"; setTextColor(Color.BLACK); setBackgroundColor(AppColors.gold)
+        val saveSettingsBtn = TextView(this).apply {
+            text = "💾 Save Settings"; setTextColor(Color.BLACK)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f); typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER; setPadding(0, dp(14), 0, dp(14))
-        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
+        }
+        GlowBox.applyTo(saveSettingsBtn, GlowBox.chip(this, color = AppColors.gold, cornerRadiusDp = 12f, filled = true))
+        content.addView(saveSettingsBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
     }
 
     private fun renderStaticPage(heading: String, body: String) {
@@ -1146,17 +1159,21 @@ class ShellActivity : AppCompatActivity() {
         content.addView(card {
             addView(TextView(this@ShellActivity).apply { text = "💡 Send Feedback"; setTextColor(AppColors.gold); setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f); typeface = Typeface.DEFAULT_BOLD; setPadding(0, 0, 0, dp(8)) })
             addView(TextView(this@ShellActivity).apply { text = "Share your thoughts to help improve স্বাধ্যায়."; setTextColor(AppColors.muted); setPadding(0, 0, 0, dp(16)) })
-            val titleField = EditText(this@ShellActivity).apply { hint = "Your name or topic"; setHintTextColor(AppColors.muted); setTextColor(AppColors.ivory); setBackgroundColor(AppColors.elevated); setPadding(dp(10), dp(10), dp(10), dp(10)) }
-            val bodyField = EditText(this@ShellActivity).apply { hint = "Your feedback…"; setHintTextColor(AppColors.muted); setTextColor(AppColors.ivory); setBackgroundColor(AppColors.elevated); setPadding(dp(10), dp(10), dp(10), dp(10)); minLines = 4; gravity = Gravity.TOP }
+            val titleField = EditText(this@ShellActivity).apply { hint = "Your name or topic"; setHintTextColor(AppColors.muted); setTextColor(AppColors.ivory); setPadding(dp(10), dp(10), dp(10), dp(10)) }
+            GlowBox.applyTo(titleField, GlowBox.panel(this@ShellActivity, color = AppColors.border, fillColor = AppColors.elevated, cornerRadiusDp = 10f))
+            val bodyField = EditText(this@ShellActivity).apply { hint = "Your feedback…"; setHintTextColor(AppColors.muted); setTextColor(AppColors.ivory); setPadding(dp(10), dp(10), dp(10), dp(10)); minLines = 4; gravity = Gravity.TOP }
+            GlowBox.applyTo(bodyField, GlowBox.panel(this@ShellActivity, color = AppColors.border, fillColor = AppColors.elevated, cornerRadiusDp = 10f))
             addView(TextView(this@ShellActivity).apply { text = "NAME / TOPIC"; setTextColor(AppColors.gold); setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f); setPadding(0, 0, 0, dp(4)) })
             addView(titleField, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(12) })
             addView(TextView(this@ShellActivity).apply { text = "FEEDBACK"; setTextColor(AppColors.gold); setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f); setPadding(0, 0, 0, dp(4)) })
             addView(bodyField, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(12) })
-            addView(TextView(this@ShellActivity).apply {
-                text = "Send Feedback"; setTextColor(AppColors.bg); setBackgroundColor(AppColors.gold)
+            val sendFeedbackBtn = TextView(this@ShellActivity).apply {
+                text = "Send Feedback"; setTextColor(AppColors.bg)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f); typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(12))
                 setOnClickListener { Toast.makeText(this@ShellActivity, "ধন্যবাদ!", Toast.LENGTH_SHORT).show(); settingsScreen = null; lifecycleScope.launch { renderSettings() } }
-            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            }
+            GlowBox.applyTo(sendFeedbackBtn, GlowBox.chip(this@ShellActivity, color = AppColors.gold, cornerRadiusDp = 12f, filled = true))
+            addView(sendFeedbackBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         })
     }
 
@@ -1165,19 +1182,24 @@ class ShellActivity : AppCompatActivity() {
         content.addView(card {
             addView(TextView(this@ShellActivity).apply { text = "🐛 Report a Bug"; setTextColor(AppColors.gold); setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f); typeface = Typeface.DEFAULT_BOLD; setPadding(0, 0, 0, dp(4)) })
             addView(TextView(this@ShellActivity).apply { text = "Describe the issue so we can fix it quickly."; setTextColor(AppColors.muted); setPadding(0, 0, 0, dp(16)) })
-            val titleField = EditText(this@ShellActivity).apply { hint = "Example: Book not opening"; setHintTextColor(AppColors.muted); setTextColor(AppColors.ivory); setBackgroundColor(AppColors.elevated); setPadding(dp(10), dp(10), dp(10), dp(10)) }
-            val descField = EditText(this@ShellActivity).apply { hint = "Steps to reproduce the issue..."; setHintTextColor(AppColors.muted); setTextColor(AppColors.ivory); setBackgroundColor(AppColors.elevated); setPadding(dp(10), dp(10), dp(10), dp(10)); minLines = 4; gravity = Gravity.TOP }
-            val deviceField = EditText(this@ShellActivity).apply { hint = "Android version / Device model"; setHintTextColor(AppColors.muted); setTextColor(AppColors.ivory); setBackgroundColor(AppColors.elevated); setPadding(dp(10), dp(10), dp(10), dp(10))
+            val titleField = EditText(this@ShellActivity).apply { hint = "Example: Book not opening"; setHintTextColor(AppColors.muted); setTextColor(AppColors.ivory); setPadding(dp(10), dp(10), dp(10), dp(10)) }
+            GlowBox.applyTo(titleField, GlowBox.panel(this@ShellActivity, color = AppColors.border, fillColor = AppColors.elevated, cornerRadiusDp = 10f))
+            val descField = EditText(this@ShellActivity).apply { hint = "Steps to reproduce the issue..."; setHintTextColor(AppColors.muted); setTextColor(AppColors.ivory); setPadding(dp(10), dp(10), dp(10), dp(10)); minLines = 4; gravity = Gravity.TOP }
+            GlowBox.applyTo(descField, GlowBox.panel(this@ShellActivity, color = AppColors.border, fillColor = AppColors.elevated, cornerRadiusDp = 10f))
+            val deviceField = EditText(this@ShellActivity).apply { hint = "Android version / Device model"; setHintTextColor(AppColors.muted); setTextColor(AppColors.ivory); setPadding(dp(10), dp(10), dp(10), dp(10))
                 setText("Android ${android.os.Build.VERSION.RELEASE} / ${android.os.Build.MODEL}") }
+            GlowBox.applyTo(deviceField, GlowBox.panel(this@ShellActivity, color = AppColors.border, fillColor = AppColors.elevated, cornerRadiusDp = 10f))
             listOf("PROBLEM TITLE" to titleField, "DESCRIPTION" to descField, "DEVICE INFO" to deviceField).forEach { (label, field) ->
                 addView(TextView(this@ShellActivity).apply { text = label; setTextColor(AppColors.gold); setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f); setPadding(0, 0, 0, dp(4)) })
                 addView(field, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(12) })
             }
-            addView(TextView(this@ShellActivity).apply {
-                text = "Send Report"; setTextColor(AppColors.bg); setBackgroundColor(AppColors.vermilion)
+            val sendReportBtn = TextView(this@ShellActivity).apply {
+                text = "Send Report"; setTextColor(AppColors.bg)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f); typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(12))
                 setOnClickListener { Toast.makeText(this@ShellActivity, "রিপোর্ট পাঠানো হয়েছে। ধন্যবাদ!", Toast.LENGTH_SHORT).show(); settingsScreen = null; lifecycleScope.launch { renderSettings() } }
-            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            }
+            GlowBox.applyTo(sendReportBtn, GlowBox.chip(this@ShellActivity, color = AppColors.vermilion, cornerRadiusDp = 12f, filled = true))
+            addView(sendReportBtn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         })
     }
 
@@ -1194,11 +1216,13 @@ class ShellActivity : AppCompatActivity() {
                 text = "স্বাধ্যায় is a digital platform dedicated to preserving and presenting the timeless knowledge of Vedic literature, Sanskrit scriptures, and the Valmiki Ramayana.\n\nThe application combines ancient wisdom with modern technology to create a simple, accessible, and immersive reading experience for students, researchers, and knowledge seekers."
                 setTextColor(AppColors.ivory); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f); setLineSpacing(0f, 1.5f); setPadding(0, 0, 0, dp(12))
             })
-            addView(TextView(this@ShellActivity).apply {
+            val quote = TextView(this@ShellActivity).apply {
                 text = "\"Knowledge preserved through time becomes wisdom for future generations.\""
                 setTextColor(AppColors.gold); setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                setBackgroundColor(AppColors.elevated); setPadding(dp(12), dp(10), dp(12), dp(10))
-            })
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+            }
+            GlowBox.applyTo(quote, GlowBox.panel(this@ShellActivity, color = AppColors.gold, fillColor = AppColors.elevated, cornerRadiusDp = 10f))
+            addView(quote)
         })
         content.addView(card {
             addView(TextView(this@ShellActivity).apply { text = "Core Features"; setTextColor(AppColors.gold); setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f); typeface = Typeface.DEFAULT_BOLD; setPadding(0, 0, 0, dp(8)) })
