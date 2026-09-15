@@ -20,6 +20,7 @@ import com.kyronix.swadhyaa.data.local.RamayanaCoreDatabase
 import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.ui.theme.AppColors
 import com.kyronix.swadhyaa.ui.theme.FontManager
+import com.kyronix.swadhyaa.ui.theme.GlowBox
 import com.kyronix.swadhyaa.ui.gesture.attachSwipeNavigation
 import com.kyronix.swadhyaa.data.repository.BhashyaField
 import com.kyronix.swadhyaa.data.repository.RamayanaBhashyaRepository
@@ -142,9 +143,9 @@ class RamayanaActivity : AppCompatActivity() {
 
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(SURFACE)
             setPadding(dp(16), dp(20), dp(16), dp(20))
         }
+        GlowBox.applyTo(card, GlowBox.panel(this, color = COPPER, fillColor = SURFACE))
         sanskritText = TextView(this).apply {
             setTextColor(COPPER)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
@@ -169,25 +170,38 @@ class RamayanaActivity : AppCompatActivity() {
         }
         btnPrev = Button(this).apply {
             text = "← আগের শ্লোক"
+            setTextColor(COPPER)
+            stateListAnimator = null
+            elevation = 0f
             setOnClickListener { vm.prev() }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginEnd = dp(6) }
         }
+        GlowBox.applyTo(btnPrev, GlowBox.chip(this, color = COPPER, cornerRadiusDp = 12f, filled = false))
         btnNext = Button(this).apply {
             text = "পরের শ্লোক →"
+            setTextColor(COPPER)
+            stateListAnimator = null
+            elevation = 0f
             setOnClickListener { vm.next() }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginStart = dp(6) }
         }
+        GlowBox.applyTo(btnNext, GlowBox.chip(this, color = COPPER, cornerRadiusDp = 12f, filled = false))
         nav.addView(btnPrev)
         nav.addView(btnNext)
         col.addView(nav)
 
-        // ভাষ্য — একটাই উৎস (স্কলার বাছাইয়ের দরকার নেই, বেদের মতো)
+        // ভাষ্য — একটাই উৎস (স্কলার বাছাইয়ের দরকার নেই, বেদের মতো)।
+        // Wrapped in its own glow panel (previously three bare views laid
+        // straight into `col`) so the commentary reads as a distinct,
+        // separated section — matching the Veda/Gita readers.
         val bhashyaHeader = TextView(this).apply {
             text = "ভাষ্য"
             setTextColor(GOLD)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, dp(24), 0, dp(4))
+            setPadding(0, 0, 0, dp(4))
         }
         val bhashyaSource = TextView(this).apply {
             text = "${RamayanaBhashyaRepository.LANGUAGE_LABEL} · ${RamayanaBhashyaRepository.SOURCE_LABEL}"
@@ -196,9 +210,17 @@ class RamayanaActivity : AppCompatActivity() {
             setPadding(0, 0, 0, dp(10))
         }
         bhashyaContent = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        col.addView(bhashyaHeader)
-        col.addView(bhashyaSource)
-        col.addView(bhashyaContent)
+        val bhashyaSection = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(14), dp(14), dp(14))
+            addView(bhashyaHeader)
+            addView(bhashyaSource)
+            addView(bhashyaContent)
+        }
+        GlowBox.applyTo(bhashyaSection, GlowBox.panel(this, color = GOLD, fillColor = SURFACE))
+        col.addView(bhashyaSection, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(20) })
 
         root.addView(col)
         return root
@@ -229,10 +251,10 @@ class RamayanaActivity : AppCompatActivity() {
         fun addBox(label: String, value: String, onTap: () -> Unit) {
             val box = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setBackgroundColor(SURFACE)
                 setPadding(dp(12), dp(8), dp(12), dp(8))
                 setOnClickListener { onTap() }
             }
+            GlowBox.applyTo(box, GlowBox.chip(this, color = COPPER, cornerRadiusDp = 10f, filled = false))
             box.addView(TextView(this).apply {
                 text = label
                 setTextColor(MUTED)
@@ -288,6 +310,9 @@ class RamayanaActivity : AppCompatActivity() {
             }
             val downloadBtn = Button(this).apply {
                 text = "ডাউনলোড করুন"
+                setTextColor(Color.BLACK)
+                stateListAnimator = null
+                elevation = 0f
                 setOnClickListener {
                     text = "ডাউনলোড হচ্ছে…"
                     isEnabled = false
@@ -307,6 +332,7 @@ class RamayanaActivity : AppCompatActivity() {
                     }
                 }
             }
+            GlowBox.applyTo(downloadBtn, GlowBox.chip(this, color = GOLD, cornerRadiusDp = 12f, filled = true))
             bhashyaContent.addView(info)
             bhashyaContent.addView(downloadBtn)
             return
