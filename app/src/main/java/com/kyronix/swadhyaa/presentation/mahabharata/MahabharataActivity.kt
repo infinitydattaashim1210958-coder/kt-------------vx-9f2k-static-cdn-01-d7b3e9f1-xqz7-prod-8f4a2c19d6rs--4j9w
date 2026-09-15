@@ -21,6 +21,7 @@ import com.kyronix.swadhyaa.data.repository.Adhyay
 import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.ui.theme.AppColors
 import com.kyronix.swadhyaa.ui.theme.FontManager
+import com.kyronix.swadhyaa.ui.theme.GlowBox
 import com.kyronix.swadhyaa.ui.gesture.attachSwipeNavigation
 import com.kyronix.swadhyaa.data.repository.MahabharataRepository
 import com.kyronix.swadhyaa.data.repository.ParbaInfo
@@ -127,9 +128,9 @@ class MahabharataActivity : AppCompatActivity() {
         // Row 2: long অধ্যায় box
         adhyayBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(SURFACE)
             setPadding(dp(14), dp(10), dp(14), dp(10))
         }
+        GlowBox.applyTo(adhyayBox, GlowBox.panel(this, color = STEEL, fillColor = SURFACE, cornerRadiusDp = 12f))
         adhyayLabel = TextView(this).apply {
             setTextColor(IVORY)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
@@ -155,14 +156,24 @@ class MahabharataActivity : AppCompatActivity() {
         }
         btnPrev = Button(this).apply {
             text = "← আগের অধ্যায়"
+            setTextColor(STEEL)
+            stateListAnimator = null
+            elevation = 0f
             setOnClickListener { vm.prevAdhyay() }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginEnd = dp(6) }
         }
+        GlowBox.applyTo(btnPrev, GlowBox.chip(this, color = STEEL, cornerRadiusDp = 12f, filled = false))
         btnNext = Button(this).apply {
             text = "পরের অধ্যায় →"
+            setTextColor(STEEL)
+            stateListAnimator = null
+            elevation = 0f
             setOnClickListener { vm.nextAdhyay() }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginStart = dp(6) }
         }
+        GlowBox.applyTo(btnNext, GlowBox.chip(this, color = STEEL, cornerRadiusDp = 12f, filled = false))
         nav.addView(btnPrev)
         nav.addView(btnNext)
         col.addView(nav)
@@ -205,10 +216,13 @@ class MahabharataActivity : AppCompatActivity() {
                 text = parba.name
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 setPadding(dp(12), dp(7), dp(12), dp(7))
-                setBackgroundColor(if (selected) STEEL else SURFACE)
                 setTextColor(if (selected) Color.BLACK else IVORY)
                 setOnClickListener { vm.selectParba(parba) }
             }
+            GlowBox.applyTo(
+                chip,
+                GlowBox.chip(this, color = if (selected) STEEL else MUTED, cornerRadiusDp = 10f, filled = selected)
+            )
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { marginEnd = dp(6) }
@@ -217,12 +231,12 @@ class MahabharataActivity : AppCompatActivity() {
         // ভাষ্য box — bigger than the পর্ব chips; only one translator today, but tappable/extensible
         val bhashyaBox = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(GOLD)
             setPadding(dp(16), dp(10), dp(16), dp(10))
             setOnClickListener {
                 Toast.makeText(this@MahabharataActivity, "এই মুহূর্তে একটাই ভাষ্য উপলব্ধ", Toast.LENGTH_SHORT).show()
             }
         }
+        GlowBox.applyTo(bhashyaBox, GlowBox.chip(this, color = GOLD, cornerRadiusDp = 12f, filled = true))
         bhashyaBox.addView(TextView(this).apply {
             text = "ভাষ্য"
             setTextColor(Color.BLACK)
@@ -251,11 +265,16 @@ class MahabharataActivity : AppCompatActivity() {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 setPadding(0, dp(12), 0, dp(10))
             })
-            contentArea.addView(Button(this).apply {
+            val downloadBtn = Button(this).apply {
                 text = if (s.downloading) "ডাউনলোড হচ্ছে…" else "ডাউনলোড করুন"
                 isEnabled = !s.downloading
+                setTextColor(Color.BLACK)
+                stateListAnimator = null
+                elevation = 0f
                 setOnClickListener { vm.download() }
-            })
+            }
+            GlowBox.applyTo(downloadBtn, GlowBox.chip(this, color = GOLD, cornerRadiusDp = 12f, filled = true))
+            contentArea.addView(downloadBtn)
             return
         }
 
@@ -282,9 +301,9 @@ class MahabharataActivity : AppCompatActivity() {
         s.upakhyanas.forEach { u: Upakhyan ->
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setBackgroundColor(SURFACE)
                 setPadding(dp(14), dp(14), dp(14), dp(14))
             }
+            GlowBox.applyTo(card, GlowBox.panel(this, color = STEEL, fillColor = SURFACE))
             if (!u.bishoy.isNullOrBlank()) {
                 card.addView(TextView(this).apply {
                     text = u.bishoy
