@@ -16,6 +16,7 @@ import com.kyronix.swadhyaa.data.repository.LibraryBookStatus
 import com.kyronix.swadhyaa.data.repository.LibraryBookWithStatus
 import com.kyronix.swadhyaa.data.repository.LibraryRepository
 import com.kyronix.swadhyaa.ui.theme.AppColors
+import com.kyronix.swadhyaa.ui.theme.GlowBox
 import kotlinx.coroutines.launch
 
 /**
@@ -75,11 +76,11 @@ class LibraryActivity : AppCompatActivity() {
 
     private fun card(block: LinearLayout.() -> Unit): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setBackgroundColor(AppColors.surface)
         setPadding(dp(14), dp(14), dp(14), dp(14))
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { bottomMargin = dp(10) }
+        ).apply { bottomMargin = dp(12) }
+        GlowBox.applyTo(this, GlowBox.panel(this@LibraryActivity, color = AppColors.gold, fillColor = AppColors.surface))
         block()
     }
 

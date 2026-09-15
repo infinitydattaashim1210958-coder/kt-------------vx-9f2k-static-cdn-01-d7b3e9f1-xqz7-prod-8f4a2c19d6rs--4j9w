@@ -22,6 +22,7 @@ import com.kyronix.swadhyaa.data.repository.LibraryChapter
 import com.kyronix.swadhyaa.data.repository.LibraryParagraph
 import com.kyronix.swadhyaa.ui.theme.AppColors
 import com.kyronix.swadhyaa.ui.theme.FontManager
+import com.kyronix.swadhyaa.ui.theme.GlowBox
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -107,13 +108,17 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
         val chapter = state.chapters.first { it.chapterId == state.selectedChapterId }
 
         // Chapter picker
-        content.addView(TextView(this).apply {
+        val chapterPicker = TextView(this).apply {
             text = "📑 অধ্যায় (${state.chapters.indexOf(chapter) + 1}/${state.chapters.size}) — বদলাতে চাপুন"
             setTextColor(AppColors.saffron)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setPadding(0, 0, 0, dp(12))
+            setPadding(dp(12), dp(8), dp(12), dp(8))
             setOnClickListener { showChapterPicker(state.chapters) }
-        })
+        }
+        GlowBox.applyTo(chapterPicker, GlowBox.chip(this, color = AppColors.saffron, cornerRadiusDp = 10f, filled = false))
+        content.addView(chapterPicker, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(16) })
 
         if (!chapter.isCover) {
             content.addView(TextView(this).apply {
@@ -163,6 +168,12 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
 
         val placedFootnotes = allFootnotes.filter { it.placed || it.note.isNotBlank() }
         if (placedFootnotes.isNotEmpty()) {
+            content.addView(TextView(this).apply {
+                background = GlowBox.glowLine(AppColors.gold)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(2)
+                ).apply { topMargin = dp(8); bottomMargin = dp(12) }
+            })
             content.addView(TextView(this).apply {
                 text = "টীকা"
                 setTextColor(AppColors.gold)
