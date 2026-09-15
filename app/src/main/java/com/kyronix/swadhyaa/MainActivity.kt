@@ -25,6 +25,7 @@ import com.kyronix.swadhyaa.presentation.home.HomeViewModel
 import com.kyronix.swadhyaa.presentation.mahabharata.MahabharataActivity
 import com.kyronix.swadhyaa.presentation.reader.ReaderActivity
 import com.kyronix.swadhyaa.presentation.ramayana.RamayanaActivity
+import com.kyronix.swadhyaa.ui.theme.GlowBox
 import kotlinx.coroutines.launch
 
 /**
@@ -118,11 +119,15 @@ class MainActivity : AppCompatActivity() {
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setBackgroundColor(SURFACE)
                 setPadding(dp(8), dp(16), dp(8), dp(16))
                 alpha = if (enabled) 1f else 0.4f
                 setOnClickListener { onSectionTap(section) }
             }
+            GlowBox.applyTo(
+                card,
+                GlowBox.panel(this, color = if (enabled) GOLD else MUTED, fillColor = SURFACE, cornerRadiusDp = 12f),
+                haloDp = 6
+            )
             card.addView(TextView(this).apply {
                 text = section.icon
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 26f)
