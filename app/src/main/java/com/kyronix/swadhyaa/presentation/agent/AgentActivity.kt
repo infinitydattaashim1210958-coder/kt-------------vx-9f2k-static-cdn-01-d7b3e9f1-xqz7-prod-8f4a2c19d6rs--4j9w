@@ -3,7 +3,6 @@ package com.kyronix.swadhyaa.presentation.agent
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
@@ -19,6 +18,7 @@ import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.data.repository.AnswerMode
 import com.kyronix.swadhyaa.ui.theme.AppColors
 import com.kyronix.swadhyaa.ui.theme.FontManager
+import com.kyronix.swadhyaa.ui.theme.GlowBox
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -195,7 +195,6 @@ class AgentActivity : AppCompatActivity() {
             setTextColor(AppColors.ivory)
             textSize = 15f
             typeface = banglaTypeface
-            background = roundedBg(AppColors.elevated, AppColors.border, dp(20))
             setPadding(dp(16), dp(10), dp(16), dp(10))
             inputType = InputType.TYPE_CLASS_TEXT or
                     InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
@@ -209,6 +208,7 @@ class AgentActivity : AppCompatActivity() {
                 } else false
             }
         }
+        GlowBox.applyTo(inputField, GlowBox.panel(this, color = AppColors.border, fillColor = AppColors.elevated, cornerRadiusDp = 20f))
         bar.addView(inputField)
 
         bar.addView(View(this).apply {
@@ -218,12 +218,20 @@ class AgentActivity : AppCompatActivity() {
         sendButton = ImageButton(this).apply {
             setImageResource(android.R.drawable.ic_menu_send)
             setColorFilter(AppColors.saffron)
-            background = roundedBg(AppColors.elevated, AppColors.border, dp(22))
             setPadding(dp(10), dp(10), dp(10), dp(10))
             layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
             contentDescription = "পাঠান"
             setOnClickListener { doSend() }
         }
+        // haloDp = 0: this button has a FIXED 44x44dp size (not WRAP_CONTENT),
+        // so growing its padding would shrink the icon's own room instead of
+        // enlarging the button — the glow rings still render, just flush
+        // with the existing bounds instead of bleeding outside them.
+        GlowBox.applyTo(
+            sendButton,
+            GlowBox.panel(this, color = AppColors.border, fillColor = AppColors.elevated, cornerRadiusDp = 22f),
+            haloDp = 0
+        )
         bar.addView(sendButton)
 
         return bar
@@ -270,7 +278,6 @@ class AgentActivity : AppCompatActivity() {
             setTextColor(if (msg.isUser) AppColors.ivory else AppColors.ivory)
             typeface = banglaTypeface
             setPadding(dp(14), dp(10), dp(14), dp(10))
-            background = roundedBg(bubbleBg, bubbleBorder, dp(16))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -281,6 +288,7 @@ class AgentActivity : AppCompatActivity() {
                 this.weight = 0f
             }
         }
+        GlowBox.applyTo(bubble, GlowBox.panel(this, color = bubbleBorder, fillColor = bubbleBg, cornerRadiusDp = 16f), haloDp = 5)
         bubbleRow.addView(bubble)
         container.addView(bubbleRow)
 
@@ -364,14 +372,6 @@ class AgentActivity : AppCompatActivity() {
     }
 
     // ── Drawing helpers ───────────────────────────────────────────────
-
-    private fun roundedBg(fillColor: Int, strokeColor: Int, radius: Int): GradientDrawable =
-        GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = radius.toFloat()
-            setColor(fillColor)
-            setStroke(dp(1), strokeColor)
-        }
 
     private fun spacer(height: Int): View = View(this).apply {
         layoutParams = LinearLayout.LayoutParams(
