@@ -22,6 +22,7 @@ import com.kyronix.swadhyaa.presentation.reader.ReaderActivity
 import com.kyronix.swadhyaa.ui.gesture.attachSwipeNavigation
 import com.kyronix.swadhyaa.ui.theme.AppColors
 import com.kyronix.swadhyaa.ui.theme.FontManager
+import com.kyronix.swadhyaa.ui.theme.GlowBox
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -114,9 +115,9 @@ class GitaActivity : AppCompatActivity() {
         // Download-gate card — visible only while the base text pack isn't ready.
         gateCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(SURFACE)
             setPadding(dp(16), dp(20), dp(16), dp(20))
         }
+        GlowBox.applyTo(gateCard, GlowBox.panel(this, color = SAFFRON, fillColor = SURFACE))
         col.addView(gateCard)
 
         // Everything below is only populated once the gate clears.
@@ -131,9 +132,9 @@ class GitaActivity : AppCompatActivity() {
 
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(SURFACE)
             setPadding(dp(16), dp(20), dp(16), dp(20))
         }
+        GlowBox.applyTo(card, GlowBox.panel(this, color = SAFFRON, fillColor = SURFACE))
         sanskritText = TextView(this).apply {
             setTextColor(SAFFRON)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 21f)
@@ -181,16 +182,28 @@ class GitaActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, dp(8), 0, 0)
         }
-        nav.addView(android.widget.Button(this).apply {
+        val btnPrev = android.widget.Button(this).apply {
             text = "← আগের শ্লোক"
+            setTextColor(SAFFRON)
+            stateListAnimator = null
+            elevation = 0f
             setOnClickListener { vm.prev() }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        })
-        nav.addView(android.widget.Button(this).apply {
+                .apply { marginEnd = dp(6) }
+        }
+        GlowBox.applyTo(btnPrev, GlowBox.chip(this, color = SAFFRON, cornerRadiusDp = 12f, filled = false))
+        val btnNext = android.widget.Button(this).apply {
             text = "পরের শ্লোক →"
+            setTextColor(SAFFRON)
+            stateListAnimator = null
+            elevation = 0f
             setOnClickListener { vm.next() }
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        })
+                .apply { marginStart = dp(6) }
+        }
+        GlowBox.applyTo(btnNext, GlowBox.chip(this, color = SAFFRON, cornerRadiusDp = 12f, filled = false))
+        nav.addView(btnPrev)
+        nav.addView(btnNext)
         readerCol.addView(nav)
 
         col.addView(sectionDivider()) // trailing spacer to match ReaderActivity's bottom padding rhythm
@@ -216,10 +229,10 @@ class GitaActivity : AppCompatActivity() {
     }
 
     private fun sectionDivider() = TextView(this).apply {
-        setBackgroundColor(SURFACE)
+        background = GlowBox.glowLine(SAFFRON)
         layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dp(1)
-        ).apply { topMargin = dp(12); bottomMargin = dp(12) }
+            LinearLayout.LayoutParams.MATCH_PARENT, dp(2)
+        ).apply { topMargin = dp(14); bottomMargin = dp(14) }
     }
 
     // ── Observation ───────────────────────────────────────────────────────
@@ -288,16 +301,17 @@ class GitaActivity : AppCompatActivity() {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             })
         } else {
-            gateCard.addView(TextView(this).apply {
+            val btn = TextView(this).apply {
                 text = "ডাউনলোড করুন"
                 setTextColor(Color.BLACK)
-                setBackgroundColor(GOLD)
                 setPadding(dp(20), dp(10), dp(20), dp(10))
                 gravity = Gravity.CENTER
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 typeface = Typeface.DEFAULT_BOLD
                 setOnClickListener { vm.downloadCoreText() }
-            }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+            }
+            GlowBox.applyTo(btn, GlowBox.chip(this, color = GOLD, cornerRadiusDp = 12f, filled = true))
+            gateCard.addView(btn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
         }
     }
 
@@ -333,7 +347,6 @@ class GitaActivity : AppCompatActivity() {
     ) {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(SURFACE)
             setPadding(dp(12), dp(8), dp(12), dp(8))
             setOnClickListener {
                 if (options.isEmpty()) return@setOnClickListener
@@ -343,6 +356,7 @@ class GitaActivity : AppCompatActivity() {
                     .show()
             }
         }
+        GlowBox.applyTo(box, GlowBox.chip(this, color = SAFFRON, cornerRadiusDp = 10f, filled = false))
         box.addView(TextView(this).apply {
             text = label; setTextColor(MUTED)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f); gravity = Gravity.CENTER
@@ -370,15 +384,19 @@ class GitaActivity : AppCompatActivity() {
         }
         s.availableLanguages.forEach { lang ->
             val selected = lang == s.selectedLanguage
-            langTabRow.addView(TextView(this).apply {
+            val tab = TextView(this).apply {
                 text = ReaderActivity.langDisplayName(lang)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setPadding(dp(16), dp(8), dp(16), dp(8))
-                setBackgroundColor(if (selected) SAFFRON else SURFACE)
                 setTextColor(if (selected) Color.BLACK else IVORY)
                 typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
                 setOnClickListener { vm.selectLanguage(lang) }
-            }, LinearLayout.LayoutParams(
+            }
+            GlowBox.applyTo(
+                tab,
+                GlowBox.chip(this, color = if (selected) SAFFRON else MUTED, filled = selected)
+            )
+            langTabRow.addView(tab, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { marginEnd = dp(8) })
         }
@@ -394,16 +412,20 @@ class GitaActivity : AppCompatActivity() {
             val isSelected = scholar.id == s.selectedScholar?.id
             val suffix = if (isDownloaded) "" else " ↓"
 
-            scholarList.addView(TextView(this).apply {
+            val row = TextView(this).apply {
                 text = "${scholar.name}$suffix"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setPadding(dp(14), dp(12), dp(14), dp(12))
-                setBackgroundColor(if (isSelected) GOLD else SURFACE)
                 setTextColor(if (isSelected) Color.BLACK else IVORY)
                 setOnClickListener { vm.selectScholar(scholar) }
-            }, LinearLayout.LayoutParams(
+            }
+            GlowBox.applyTo(
+                row,
+                GlowBox.chip(this, color = if (isSelected) GOLD else MUTED, cornerRadiusDp = 10f, filled = isSelected)
+            )
+            scholarList.addView(row, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(4) })
+            ).apply { bottomMargin = dp(6) })
 
             // The fix: insert this scholar's content right here, between
             // their row and the next scholar's row — not after the loop.
@@ -419,8 +441,8 @@ class GitaActivity : AppCompatActivity() {
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), dp(8), dp(10), dp(12))
-            setBackgroundColor(SURFACE)
         }.also {
+            GlowBox.applyTo(it, GlowBox.panel(this, color = GOLD, fillColor = SURFACE))
             it.layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(8) }
@@ -443,16 +465,17 @@ class GitaActivity : AppCompatActivity() {
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 })
             } else {
-                container.addView(TextView(this).apply {
+                val btn = TextView(this).apply {
                     text = "ডাউনলোড করুন"
                     setTextColor(Color.BLACK)
-                    setBackgroundColor(GOLD)
                     setPadding(dp(20), dp(10), dp(20), dp(10))
                     gravity = Gravity.CENTER
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     typeface = Typeface.DEFAULT_BOLD
                     setOnClickListener { vm.downloadScholar(scholar) }
-                }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+                }
+                GlowBox.applyTo(btn, GlowBox.chip(this, color = GOLD, cornerRadiusDp = 12f, filled = true))
+                container.addView(btn, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             }
             return container
         }
