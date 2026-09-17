@@ -341,7 +341,9 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
         val raw = p.content ?: return spacer(dp(4))
 
         // Build spannable with ref markers highlighted
-        val (processedText, markerRanges) = FootnoteMarkerInserter.insert(raw, p.refs)
+        val insertResult = FootnoteMarkerInserter.insert(raw, p.refs)
+        val processedText = insertResult.text
+        val markerSpans   = insertResult.markers   // List<MarkerSpan>
 
         // Paragraph indent for body text
         val isBody = !p.isCenter && !p.isRight && !p.isBold
@@ -354,9 +356,9 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
         if (p.isUnderline) spannable.setSpan(UnderlineSpan(), 0, displayText.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 
         // Ref markers: amber superscript + tap to show float popup
-        markerRanges.markers.forEach { (mStart, mEnd) ->
-            val s = mStart + indentOffset
-            val e = mEnd   + indentOffset
+        markerSpans.forEach { marker ->
+            val s = marker.start + indentOffset
+            val e = marker.end   + indentOffset
             if (s < 0 || e > displayText.length || s >= e) return@forEach
             val refNum = displayText.substring(s, e)
             spannable.setSpan(BackgroundColorSpan(0x33F5A623.toInt()), s, e, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -448,8 +450,8 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
             setColor(0xF0231A0F.toInt())
             setStroke(dp(1.5f).toInt(), 0xFFF5A623.toInt())
         }
-        val container = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             background  = bg
             addView(tv)
         }
