@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.kyronix.swadhyaa.data.local.MasterDatabase
+import com.kyronix.swadhyaa.data.local.entity.LibraryBookSelectionEntity
 import com.kyronix.swadhyaa.data.repository.LibraryChapter
 import com.kyronix.swadhyaa.data.repository.LibraryDbBookRepository
 import com.kyronix.swadhyaa.data.repository.LibraryParagraph
@@ -17,7 +19,9 @@ sealed class DbBookUiState {
     data class Success(
         val chapters: List<LibraryChapter>,
         val selectedChapterId: String,
-        val paragraphs: List<LibraryParagraph>
+        val paragraphs: List<LibraryParagraph>,
+        /** selections keyed by para_seq for O(1) lookup at render time */
+        val selectionsByParaSeq: Map<Int, List<LibraryBookSelectionEntity>> = emptyMap()
     ) : DbBookUiState()
     data class Error(val message: String) : DbBookUiState()
 }
@@ -30,9 +34,9 @@ class LibraryDbBookReaderViewModel(
     private val _uiState = MutableStateFlow<DbBookUiState>(DbBookUiState.Loading)
     val uiState: StateFlow<DbBookUiState> = _uiState.asStateFlow()
 
-    init {
-        loadChapters()
-    }
+    private val dao by lazy { MasterDatabase.getInstance(appContext).masterDao() }
+
+    init { loadChapters() }
 
     private fun loadChapters() {
         viewModelScope.launch {
@@ -61,19 +65,59 @@ class LibraryDbBookReaderViewModel(
         viewModelScope.launch {
             try {
                 val paragraphs = LibraryDbBookRepository.getParagraphs(appContext, bookId, chapterId)
-                _uiState.value = DbBookUiState.Success(chapters, chapterId, paragraphs)
+                val selections = dao.getSelectionsForChapter(bookId, chapterId)
+                val selMap = selections.groupBy { it.paraSeq }
+                _uiState.value = DbBookUiState.Success(chapters, chapterId, paragraphs, selMap)
             } catch (e: Exception) {
                 _uiState.value = DbBookUiState.Error(e.message ?: "লোড ব্যর্থ হয়েছে")
             }
         }
     }
 
-    class Factory(private val appContext: Context, private val bookId: String) : ViewModelProvider.Factory {
+    /** Save a highlight or bookmark; then reload selections so the UI refreshes. */
+    fun saveSelection(
+        chapterId: String,
+        paraSeq: Int,
+        selStart: Int,
+        selEnd: Int,
+        selectedText: String,
+        kind: String  // "highlight" or "bookmark"
+    ) {
+        viewModelScope.launch {
+            try {
+                dao.insertSelection(LibraryBookSelectionEntity(
+                    bookId = bookId, chapterId = chapterId, paraSeq = paraSeq,
+                    selStart = selStart, selEnd = selEnd,
+                    selectedText = selectedText, kind = kind
+                ))
+                // Refresh selections without reloading full paragraph list
+                refreshSelections(chapterId)
+            } catch (_: Exception) {}
+        }
+    }
+
+    /** Delete a specific selection by its DB id. */
+    fun deleteSelection(id: Int, chapterId: String) {
+        viewModelScope.launch {
+            try {
+                dao.deleteSelection(id)
+                refreshSelections(chapterId)
+            } catch (_: Exception) {}
+        }
+    }
+
+    private suspend fun refreshSelections(chapterId: String) {
+        val current = _uiState.value as? DbBookUiState.Success ?: return
+        val selections = dao.getSelectionsForChapter(bookId, chapterId)
+        _uiState.value = current.copy(selectionsByParaSeq = selections.groupBy { it.paraSeq })
+    }
+
+    class Factory(private val appContext: Context, private val bookId: String) :
+        ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            if (modelClass.isAssignableFrom(LibraryDbBookReaderViewModel::class.java)) {
+            if (modelClass.isAssignableFrom(LibraryDbBookReaderViewModel::class.java))
                 return LibraryDbBookReaderViewModel(appContext.applicationContext, bookId) as T
-            }
             throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
         }
     }
