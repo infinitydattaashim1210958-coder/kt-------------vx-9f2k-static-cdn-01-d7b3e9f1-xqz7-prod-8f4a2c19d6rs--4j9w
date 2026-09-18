@@ -12,6 +12,7 @@ import android.widget.EditText
 import android.widget.GridLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -749,53 +750,90 @@ class ShellActivity : AppCompatActivity() {
             addView(row)
         })
 
-        // FONT SIZE
+        // FONT SIZE — horizontal drag slider (SeekBar)
         content.addView(settingsSection("🔤  FONT SIZE"))
         content.addView(card {
-            addView(TextView(this@ShellActivity).apply {
-                text = "Size"
+            // Header row: label left, current size value right
+            val curSize = settingsRepo.settingsFlow.first().fontSize  // 14..30
+            val headerRow = LinearLayout(this@ShellActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity     = Gravity.CENTER_VERTICAL
+                setPadding(0, 0, 0, dp(6))
+            }
+            headerRow.addView(TextView(this@ShellActivity).apply {
+                text = "Font Size"
                 setTextColor(AppColors.ivory)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             })
-            val cur = settingsRepo.settingsFlow.first().fontSize
             val sizeLabel = TextView(this@ShellActivity).apply {
-                text = "${cur}px"
+                text = "${curSize}px"
                 setTextColor(AppColors.gold)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 typeface = Typeface.DEFAULT_BOLD
             }
-            val preview = TextView(this@ShellActivity).apply {
-                text = "ॐ अग्निमीळे पुरोहितं यज्ञस्य देवमृत्विजम्।"
-                setTextColor(AppColors.ivory)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, cur.toFloat())
-                setPadding(0, dp(8), 0, 0)
-            }
-            val sizeRow = LinearLayout(this@ShellActivity).apply {
+            headerRow.addView(sizeLabel)
+            addView(headerRow)
+
+            // Min / Max labels above the slider
+            val rangeRow = LinearLayout(this@ShellActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
+                gravity     = Gravity.CENTER_VERTICAL
+                setPadding(0, 0, 0, dp(2))
             }
-            sizeRow.addView(TextView(this@ShellActivity).apply {
-                text = "Small (14)"; setTextColor(AppColors.muted)
+            rangeRow.addView(TextView(this@ShellActivity).apply {
+                text = "A"   // small indicator
+                setTextColor(AppColors.muted)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            })
+            rangeRow.addView(TextView(this@ShellActivity).apply {
+                // spacer
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             })
-            sizeRow.addView(sizeLabel)
-            sizeRow.addView(TextView(this@ShellActivity).apply {
-                text = "Large (30)"; setTextColor(AppColors.muted)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { gravity = Gravity.END }
+            rangeRow.addView(TextView(this@ShellActivity).apply {
+                text = "A"   // large indicator
+                setTextColor(AppColors.muted)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+                layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
             })
-            val btnRow = LinearLayout(this@ShellActivity).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
-            btnRow.addView(TextView(this@ShellActivity).apply {
-                text = " − "; setTextColor(AppColors.gold); setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-                setOnClickListener { lifecycleScope.launch { val n = (settingsRepo.settingsFlow.first().fontSize - 1).coerceIn(14, 30); settingsRepo.setFontSize(n); sizeLabel.text = "${n}px"; preview.setTextSize(TypedValue.COMPLEX_UNIT_SP, n.toFloat()) } }
+            addView(rangeRow)
+
+            // SeekBar — range 0..16 maps to fontSize 14..30
+            val FONT_MIN = 14; val FONT_MAX = 30
+            val seekBar = SeekBar(this@ShellActivity).apply {
+                max      = FONT_MAX - FONT_MIN       // 16 steps
+                progress = curSize - FONT_MIN
+                setPadding(0, dp(4), 0, dp(4))
+                // Amber/gold thumb tint
+                progressDrawable?.setTint(AppColors.gold)
+                thumb?.setTint(AppColors.saffron)
+            }
+
+            val preview = TextView(this@ShellActivity).apply {
+                text = "ও৩ম্ · ॐ अग्निमीळे पुरोहितं यज्ञस्य देवमृत्विजम्।"
+                setTextColor(AppColors.ivory)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, curSize.toFloat())
+                setPadding(0, dp(10), 0, 0)
+                setLineSpacing(0f, 1.3f)
+            }
+
+            seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
+                    val newSize = (FONT_MIN + progress).coerceIn(FONT_MIN, FONT_MAX)
+                    sizeLabel.text = "${newSize}px"
+                    preview.setTextSize(TypedValue.COMPLEX_UNIT_SP, newSize.toFloat())
+                }
+                override fun onStartTrackingTouch(sb: SeekBar) {}
+                override fun onStopTrackingTouch(sb: SeekBar) {
+                    // Persist only when finger lifts — avoids rapid DB writes
+                    val newSize = (FONT_MIN + sb.progress).coerceIn(FONT_MIN, FONT_MAX)
+                    lifecycleScope.launch { settingsRepo.setFontSize(newSize) }
+                }
             })
-            btnRow.addView(TextView(this@ShellActivity).apply {
-                text = " + "; setTextColor(AppColors.gold); setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
-                setOnClickListener { lifecycleScope.launch { val n = (settingsRepo.settingsFlow.first().fontSize + 1).coerceIn(14, 30); settingsRepo.setFontSize(n); sizeLabel.text = "${n}px"; preview.setTextSize(TypedValue.COMPLEX_UNIT_SP, n.toFloat()) } }
-            })
-            addView(sizeRow)
-            addView(btnRow)
+
+            addView(seekBar, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
             addView(preview)
         })
 
