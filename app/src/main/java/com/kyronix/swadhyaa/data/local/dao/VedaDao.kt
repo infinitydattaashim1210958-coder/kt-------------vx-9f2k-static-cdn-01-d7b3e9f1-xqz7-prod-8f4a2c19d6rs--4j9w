@@ -136,6 +136,9 @@ interface VedaDao {
     )
     suspend fun getFirstMantra(vedaId: Int): MantraEntity?
 
+    @Query("SELECT * FROM mantras WHERE id = :id LIMIT 1")
+    suspend fun getMantraById(id: Int): MantraEntity?
+
     @Query(
         """
         SELECT * FROM mantras
