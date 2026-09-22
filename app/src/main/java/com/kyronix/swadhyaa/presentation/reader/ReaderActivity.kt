@@ -6,6 +6,7 @@ import android.graphics.Typeface
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
@@ -21,8 +22,15 @@ import com.kyronix.swadhyaa.data.local.CoreDatabase
 import com.kyronix.swadhyaa.data.local.entity.ScholarEntity
 import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.data.prefs.UserPrefs
+import com.kyronix.swadhyaa.data.remote.MantraAudioResolver
 import com.kyronix.swadhyaa.data.repository.BhashyaRepository
 import com.kyronix.swadhyaa.data.repository.VedaRepository
+import com.kyronix.swadhyaa.presentation.audio.AudioPlayerViewModel
+import com.kyronix.swadhyaa.presentation.audio.MantraAudioPlayerView
+import com.kyronix.swadhyaa.presentation.audio.MantraPlaybackState
+import com.kyronix.swadhyaa.presentation.audio.MantraTextAnimView
+import com.kyronix.swadhyaa.presentation.audio.currentRef
+import com.kyronix.swadhyaa.presentation.audio.isListeningMode
 import com.kyronix.swadhyaa.ui.gesture.attachSwipeNavigation
 import com.kyronix.swadhyaa.ui.theme.AppColors
 import com.kyronix.swadhyaa.ui.theme.FontManager
@@ -62,9 +70,16 @@ class ReaderActivity : AppCompatActivity() {
     private val vedaId by lazy { intent.getIntExtra(EXTRA_VEDA_ID, 1) }
 
     private lateinit var vm: ReaderViewModel
+    private lateinit var audioVm: AudioPlayerViewModel
     private lateinit var prefs: UserPrefs
     private lateinit var devanagariTypeface: Typeface
     private lateinit var banglaTypeface: Typeface
+
+    // Audio: the mantra-recitation player + the in-app "glowing mantra"
+    // overlay shown while Listening Mode auto-advances (see observe()).
+    private lateinit var audioPlayerView: MantraAudioPlayerView
+    private lateinit var mantraAnimOverlay: MantraTextAnimView
+    private var lastAnimatedMantraRef: String? = null
 
     // View references
     private lateinit var titleBar: TextView
@@ -105,11 +120,44 @@ class ReaderActivity : AppCompatActivity() {
             this,
             ReaderViewModel.Factory(vedaRepo, bhashyaRepo, applicationContext, vedaId)
         )[ReaderViewModel::class.java]
+        audioVm = ViewModelProvider(
+            this,
+            AudioPlayerViewModel.Factory(applicationContext)
+        )[AudioPlayerViewModel::class.java]
 
         val root = buildUi()
         root.attachSwipeNavigation(onSwipeLeft = { vm.next() }, onSwipeRight = { vm.prev() })
         setContentView(root)
+
+        audioPlayerView.bind(this, audioVm)
+        audioPlayerView.onRequestLoad = {
+            vm.state.value.current?.let { m ->
+                audioPlayerView.currentMantraId = m.id
+                audioVm.loadMantra(
+                    mantraId       = m.id,
+                    vedaId         = m.vedaId,
+                    vedaCode       = m.vedaCode,
+                    mantraRefId    = m.mantraRefId,
+                    devanagariText = m.sanskrit,
+                    displayLabel   = m.refLabel
+                )
+            }
+        }
+
         observe()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Service is already foreground+alive independent of this bind (see
+        // MantraPlayerService kdoc) — this just gets us a direct reference
+        // to call play()/seekTo()/etc. and to collect its state Flow.
+        audioVm.bindService(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        audioVm.unbindService(this)
     }
 
     // ── UI construction ───────────────────────────────────────────────────
@@ -184,6 +232,25 @@ class ReaderActivity : AppCompatActivity() {
         card.addView(sanskritText)
         card.addView(metaText)
         col.addView(card)
+
+        // Mantra recitation player — play/pause, seek, Reading↔Listening
+        // Mode toggle. Streams directly (no download); Listening Mode
+        // auto-advances through mantras and keeps this screen following
+        // along (see observe()).
+        audioPlayerView = MantraAudioPlayerView(this)
+        GlowBox.applyTo(audioPlayerView, GlowBox.panel(this, color = GOLD, fillColor = SURFACE))
+        col.addView(audioPlayerView, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(12) })
+
+        // Hidden until Listening Mode actually starts advancing — the
+        // in-app equivalent of the lock-screen glowing-mantra transition
+        // (the OS lock screen itself only accepts title/subtitle/album-art
+        // for the system media widget; see MantraArtGenerator).
+        mantraAnimOverlay = MantraTextAnimView(this).apply { visibility = View.GONE }
+        col.addView(mantraAnimOverlay, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(8) })
 
         statusText = TextView(this).apply {
             setTextColor(GOLD)
@@ -277,6 +344,10 @@ class ReaderActivity : AppCompatActivity() {
                     ).joinToString("  ·  ")
                     statusText.text = "${m.vedaName} · id ${m.id}"
 
+                    audioPlayerView.currentMantraId = m.id
+                    audioPlayerView.audioAvailableForCurrent =
+                        MantraAudioResolver.resolveUrl(m.vedaCode, m.mantraRefId) != null
+
                     renderVedaChips(s)
                     renderJump(s)
                     renderLangTabs(s)
@@ -291,6 +362,34 @@ class ReaderActivity : AppCompatActivity() {
                             label = m.refLabel
                         )
                     )
+                }
+            }
+        }
+
+        // Follow Listening Mode: when MantraPlayerService auto-advances to
+        // the next mantra, bring the reading screen (text/meta/bhashya)
+        // along with it, and drive the glowing-mantra overlay — otherwise
+        // only the audio would move while the screen stayed behind.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                audioVm.state.collect { audioState ->
+                    val ref = audioState.currentRef
+                    val listening = audioState.isListeningMode
+
+                    if (listening && ref != null && ref.vedaId == vm.state.value.current?.vedaId) {
+                        vm.jumpToId(ref.mantraId)
+                    }
+
+                    if (listening && ref != null && audioState is MantraPlaybackState.Playing) {
+                        if (ref.mantraRefId != lastAnimatedMantraRef) {
+                            lastAnimatedMantraRef = ref.mantraRefId
+                            mantraAnimOverlay.visibility = View.VISIBLE
+                            mantraAnimOverlay.showMantra(ref.devanagariText, ref.displayLabel)
+                        }
+                    } else if (lastAnimatedMantraRef != null) {
+                        lastAnimatedMantraRef = null
+                        mantraAnimOverlay.hideMantra { mantraAnimOverlay.visibility = View.GONE }
+                    }
                 }
             }
         }
