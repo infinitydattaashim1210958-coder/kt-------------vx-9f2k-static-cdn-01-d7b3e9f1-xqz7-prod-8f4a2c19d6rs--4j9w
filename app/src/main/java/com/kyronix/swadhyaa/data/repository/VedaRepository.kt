@@ -66,6 +66,16 @@ class VedaRepository(
         dao.getPrevMantra(vedaId, currentId)?.let { toContent(it) }
     }
 
+    /**
+     * Fetch a mantra directly by its primary key.
+     * Used by ReaderViewModel.jumpToId() to keep the on-screen mantra in
+     * sync with MantraPlayerService's Listening Mode auto-advance, which
+     * tracks position by the same `id` ordering (see VedaDao.getNextMantra).
+     */
+    suspend fun getById(id: Int): MantraContent? = withContext(Dispatchers.IO) {
+        dao.getMantraById(id)?.let { toContent(it) }
+    }
+
     suspend fun getLevel1List(vedaId: Int): List<Int> = withContext(Dispatchers.IO) {
         dao.getLevel1List(vedaId)
     }
@@ -107,6 +117,7 @@ class VedaRepository(
             vedaId = m.vedaId,
             vedaCode = veda?.code ?: "",
             vedaName = veda?.name ?: "",
+            mantraRefId = m.mantraRefId,
             level1 = l1,
             level2 = l2,
             level3 = l3,
