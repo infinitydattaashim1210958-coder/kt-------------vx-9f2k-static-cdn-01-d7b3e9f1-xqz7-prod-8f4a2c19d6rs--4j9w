@@ -73,7 +73,7 @@ class MantraTextAnimView @JvmOverloads constructor(
         // Mantra text (Sanskrit / Devanagari)
         tvMantra = GlowTextView(context).apply {
             textSize  = 18f
-            textColor(cGold)
+            setTextColor(cGold)
             glowColor = Color.parseColor("#FFD700")
             glowRadius= 14f
             gravity   = Gravity.CENTER
