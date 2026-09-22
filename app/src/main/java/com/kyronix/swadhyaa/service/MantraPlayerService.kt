@@ -266,11 +266,14 @@ class MantraPlayerService : Service() {
         val next = vedaDao.getNextMantra(ref.vedaId, ref.mantraId) ?: run {
             Log.d(TAG, "No next mantra after ${ref.mantraRefId}"); return
         }
+        val nextId = next.id ?: run {
+            Log.w(TAG, "Next mantra ${next.mantraRefId} has null id, skipping"); return
+        }
         val url = MantraAudioResolver.resolveUrl(ref.vedaCode, next.mantraRefId) ?: run {
             Log.w(TAG, "No audio URL for ${next.mantraRefId}"); return
         }
         val nextRef = MantraAudioRef(
-            mantraId       = next.id,
+            mantraId       = nextId,
             vedaId         = ref.vedaId,
             vedaCode       = ref.vedaCode,
             mantraRefId    = next.mantraRefId,
@@ -286,11 +289,14 @@ class MantraPlayerService : Service() {
         val prev = vedaDao.getPrevMantra(ref.vedaId, ref.mantraId) ?: run {
             Log.d(TAG, "No prev mantra before ${ref.mantraRefId}"); return
         }
+        val prevId = prev.id ?: run {
+            Log.w(TAG, "Prev mantra ${prev.mantraRefId} has null id, skipping"); return
+        }
         val url = MantraAudioResolver.resolveUrl(ref.vedaCode, prev.mantraRefId) ?: run {
             Log.w(TAG, "No audio URL for ${prev.mantraRefId}"); return
         }
         val prevRef = MantraAudioRef(
-            mantraId       = prev.id,
+            mantraId       = prevId,
             vedaId         = ref.vedaId,
             vedaCode       = ref.vedaCode,
             mantraRefId    = prev.mantraRefId,
