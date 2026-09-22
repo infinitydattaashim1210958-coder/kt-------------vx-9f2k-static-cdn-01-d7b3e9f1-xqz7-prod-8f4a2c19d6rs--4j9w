@@ -5,6 +5,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
+    id("kotlin-parcelize")
 }
 
 val localProps = Properties().apply {
@@ -67,6 +68,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    // MediaSession + MediaStyle notification support
+    implementation("androidx.media:media:1.7.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
