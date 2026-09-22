@@ -275,9 +275,7 @@ class MantraPlayerService : Service() {
             vedaCode       = ref.vedaCode,
             mantraRefId    = next.mantraRefId,
             audioUrl       = url,
-            // TODO: replace next.mantraRefId with actual Sanskrit text field on MantraEntity
-            // e.g. devanagariText = next.devanagari ?: next.mantraRefId
-            devanagariText = next.mantraRefId,
+            devanagariText = next.sanskritText ?: next.mantraRefId,
             displayLabel   = buildLabel(ref.vedaCode, next)
         )
         play(nextRef)
@@ -296,7 +294,7 @@ class MantraPlayerService : Service() {
             vedaId         = ref.vedaId,
             vedaCode       = ref.vedaCode,
             mantraRefId    = prev.mantraRefId,
-            devanagariText = prev.mantraRefId,  // TODO: use actual text field
+            devanagariText = prev.sanskritText ?: prev.mantraRefId,
             audioUrl       = url,
             displayLabel   = buildLabel(ref.vedaCode, prev)
         )
