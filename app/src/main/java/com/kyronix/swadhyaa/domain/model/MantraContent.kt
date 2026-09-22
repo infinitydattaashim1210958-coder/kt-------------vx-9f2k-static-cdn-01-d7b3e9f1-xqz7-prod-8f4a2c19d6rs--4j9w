@@ -8,6 +8,8 @@ data class MantraContent(
     val vedaId: Int,
     val vedaCode: String,
     val vedaName: String,
+    /** Raw hierarchical ref (e.g. "1_2_2") — needed by MantraAudioResolver to find this mantra's audio. */
+    val mantraRefId: String,
     val level1: Int?,
     val level2: Int?,
     val level3: Int?,
