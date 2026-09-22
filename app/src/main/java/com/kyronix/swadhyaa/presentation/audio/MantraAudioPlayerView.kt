@@ -14,31 +14,12 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
-/**
- * Self-contained audio player widget that binds to [AudioPlayerViewModel].
- *
- * Layout (vertical):
- * ┌────────────────────────────────────────────────────┐
- * │  মন্ত্র উচ্চারণ                                  │
- * │  ▶   ──────●──────────  0:07 / 0:24   📖 Reading  │
- * │             [status / spinner row]                 │
- * └────────────────────────────────────────────────────┘
- *
- * Usage:
- * ```kotlin
- * val playerView = MantraAudioPlayerView(context)
- * container.addView(playerView)
- * playerView.bind(viewLifecycleOwner, audioPlayerViewModel)
- * // then call audioPlayerViewModel.loadMantra(...)
- * ```
- */
 class MantraAudioPlayerView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
     defStyle: Int = 0
 ) : LinearLayout(context, attrs, defStyle) {
 
-    // ── Colours (matching app dark theme) ────────────────────────────────────
     private val cGold    = Color.parseColor("#C4A574")
     private val cIvory   = Color.parseColor("#F5E6C8")
     private val cMuted   = Color.parseColor("#A89070")
@@ -46,12 +27,10 @@ class MantraAudioPlayerView @JvmOverloads constructor(
     private val cTrack   = Color.parseColor("#3C3020")
     private val cError   = Color.parseColor("#E57373")
 
-    // ── Dimension helpers ─────────────────────────────────────────────────────
     private val dm = context.resources.displayMetrics
     private fun dp(v: Number) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), dm).toInt()
-    private fun sp(v: Number) = v.toFloat()   // setTextSize accepts SP directly
+    private fun sp(v: Number) = v.toFloat()
 
-    // ── Child views ───────────────────────────────────────────────────────────
     private val vLabel:     TextView
     private val vPlayerRow: LinearLayout
     private val vPlayBtn:   TextView
@@ -67,22 +46,40 @@ class MantraAudioPlayerView @JvmOverloads constructor(
     private var vm: AudioPlayerViewModel? = null
     private var isSeeking = false
 
-    // ─────────────────────────────────────────────────────────────────────────
+    // ── Layout constants + SeekBar listener ─────────────────────────────────
+    // Must be declared here, before init{} — Kotlin initializes class members
+    // top-to-bottom, and init{} below references MP/WC/seekListener.
+    private val MP = LayoutParams.MATCH_PARENT
+    private val WC = LayoutParams.WRAP_CONTENT
+
+    private fun lp(w: Int, h: Int, weight: Float = 0f) = LayoutParams(w, h, weight)
+
+    private val seekListener = object : SeekBar.OnSeekBarChangeListener {
+        override fun onStartTrackingTouch(sb: SeekBar) { isSeeking = true }
+        override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
+            if (!fromUser) return
+            val dur = (vm?.state?.value?.durationMs ?: 0)
+            val pos = (progress.toFloat() / 1000 * dur).toInt()
+            vTime.text = "${msStr(pos)} / ${msStr(dur)}"
+        }
+        override fun onStopTrackingTouch(sb: SeekBar) {
+            isSeeking = false
+            vm?.seekTo(sb.progress.toFloat() / 1000f)
+        }
+    }
+
     init {
         orientation = VERTICAL
         setBackgroundColor(cSurface)
         setPadding(dp(14), dp(10), dp(14), dp(12))
 
-        // ── "মন্ত্র উচ্চারণ" label ────────────────────────────────────────
         vLabel = tv("মন্ত্র উচ্চারণ", 10.5f, cMuted).also {
             it.setPadding(0, 0, 0, dp(7))
             addView(it)
         }
 
-        // ── Player row ────────────────────────────────────────────────────────
         vPlayerRow = row(Gravity.CENTER_VERTICAL).also { addView(it, lp(MP, WC)) }
 
-        // Play / Pause button
         vPlayBtn = tv("▶", 22f, cGold).apply {
             gravity = Gravity.CENTER
             setOnClickListener { vm?.togglePlayPause() }
@@ -90,7 +87,6 @@ class MantraAudioPlayerView @JvmOverloads constructor(
         }
         vPlayerRow.addView(vPlayBtn, lp(dp(40), dp(40)))
 
-        // Seek bar
         vSeek = SeekBar(context).apply {
             max = 1000
             thumbTintList              = ColorStateList.valueOf(cGold)
@@ -100,17 +96,13 @@ class MantraAudioPlayerView @JvmOverloads constructor(
         }
         vPlayerRow.addView(vSeek, lp(0, WC, 1f).apply { marginStart = dp(6); marginEnd = dp(6) })
 
-        // Time label
         vTime = tv("0:00", 10.5f, cMuted).apply {
             minWidth = dp(60); gravity = Gravity.END or Gravity.CENTER_VERTICAL
         }
         vPlayerRow.addView(vTime, lp(dp(64), WC))
 
-        // Divider
         vPlayerRow.addView(divider())
 
-        // ── Mode toggle button ─────────────────────────────────────────────
-        // Vertical: [icon] / [label]
         vModeBtn = LinearLayout(context).apply {
             orientation = VERTICAL
             gravity = Gravity.CENTER
@@ -129,7 +121,6 @@ class MantraAudioPlayerView @JvmOverloads constructor(
         vModeBtn.addView(vModeLbl,  lp(WC, WC))
         vPlayerRow.addView(vModeBtn, lp(dp(58), WC))
 
-        // ── Status row (spinner + text for loading/error/unavailable) ─────────
         vStatusRow = row(Gravity.CENTER_VERTICAL).also {
             it.visibility = GONE
             it.setPadding(0, dp(6), 0, 0)
@@ -143,14 +134,6 @@ class MantraAudioPlayerView @JvmOverloads constructor(
         vStatusRow.addView(vStatus, lp(0, WC, 1f))
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Public API
-    // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Attach this view to a ViewModel and start collecting state.
-     * Call once after the view is created.
-     */
     fun bind(owner: LifecycleOwner, viewModel: AudioPlayerViewModel) {
         vm = viewModel
         owner.lifecycleScope.launch {
@@ -158,25 +141,16 @@ class MantraAudioPlayerView @JvmOverloads constructor(
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Rendering
-    // ─────────────────────────────────────────────────────────────────────────
-
     private fun render(s: MantraPlaybackState) {
         when (s) {
-            // ── Idle ───────────────────────────────────────────────────────────
             MantraPlaybackState.Idle -> {
                 vPlayerRow.visibility = GONE
                 hideStatus()
             }
-
-            // ── Loading (buffering stream) ─────────────────────────────────────
             MantraPlaybackState.Loading -> {
                 vPlayerRow.visibility = GONE
                 showStatus(spinner = true, text = "লোড হচ্ছে...", color = cMuted)
             }
-
-            // ── Playing / Paused ──────────────────────────────────────────────
             is MantraPlaybackState.Playing,
             is MantraPlaybackState.Paused -> {
                 vPlayerRow.visibility = VISIBLE
@@ -196,7 +170,6 @@ class MantraAudioPlayerView @JvmOverloads constructor(
                     vTime.text     = "${msStr(posMs)} / ${msStr(durMs)}"
                 }
 
-                // Mode button state
                 if (listening) {
                     vModeIcon.text = "🎧"
                     vModeLbl.text  = "Listening\nMode"
@@ -209,16 +182,12 @@ class MantraAudioPlayerView @JvmOverloads constructor(
                     vModeLbl.setTextColor(cMuted)
                 }
             }
-
-            // ── Not available ─────────────────────────────────────────────────
             MantraPlaybackState.NotAvailable -> {
                 vPlayerRow.visibility = GONE
                 showStatus(spinner = false,
                     text  = "এই মন্ত্রের অডিও পাওয়া যায়নি",
                     color = cMuted)
             }
-
-            // ── Error ──────────────────────────────────────────────────────────
             is MantraPlaybackState.Error -> {
                 vPlayerRow.visibility = GONE
                 showStatus(spinner = false,
@@ -236,34 +205,6 @@ class MantraAudioPlayerView @JvmOverloads constructor(
     }
 
     private fun hideStatus() { vStatusRow.visibility = GONE }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // SeekBar listener
-    // ─────────────────────────────────────────────────────────────────────────
-
-    private val seekListener = object : SeekBar.OnSeekBarChangeListener {
-        override fun onStartTrackingTouch(sb: SeekBar) { isSeeking = true }
-        override fun onProgressChanged(sb: SeekBar, progress: Int, fromUser: Boolean) {
-            if (!fromUser) return
-            // Live time update while dragging
-            val dur = (vm?.state?.value?.durationMs ?: 0)
-            val pos = (progress.toFloat() / 1000 * dur).toInt()
-            vTime.text = "${msStr(pos)} / ${msStr(dur)}"
-        }
-        override fun onStopTrackingTouch(sb: SeekBar) {
-            isSeeking = false
-            vm?.seekTo(sb.progress.toFloat() / 1000f)
-        }
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Layout / view factories
-    // ─────────────────────────────────────────────────────────────────────────
-
-    private val MP = LayoutParams.MATCH_PARENT
-    private val WC = LayoutParams.WRAP_CONTENT
-
-    private fun lp(w: Int, h: Int, weight: Float = 0f) = LayoutParams(w, h, weight)
 
     private fun tv(text: String, sizeSp: Float, color: Int) = TextView(context).apply {
         this.text = text
