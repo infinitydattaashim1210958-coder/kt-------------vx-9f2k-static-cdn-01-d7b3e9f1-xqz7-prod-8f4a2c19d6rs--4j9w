@@ -73,7 +73,7 @@ class MantraTextAnimView @JvmOverloads constructor(
         // Mantra text (Sanskrit / Devanagari)
         tvMantra = GlowTextView(context).apply {
             textSize  = 18f
-            textColor = cGold
+            textColor(cGold)
             glowColor = Color.parseColor("#FFD700")
             glowRadius= 14f
             gravity   = Gravity.CENTER
@@ -186,7 +186,6 @@ class MantraTextAnimView @JvmOverloads constructor(
         attrs: AttributeSet? = null
     ) : androidx.appcompat.widget.AppCompatTextView(context, attrs) {
 
-        var textColor:  Int   = Color.parseColor("#C4A574"); set(v) { field = v; setTextColor(v) }
         var glowColor:  Int   = Color.parseColor("#FFD700"); set(v) { field = v; applyGlow() }
         var glowRadius: Float = 12f;                         set(v) { field = v; applyGlow() }
 
