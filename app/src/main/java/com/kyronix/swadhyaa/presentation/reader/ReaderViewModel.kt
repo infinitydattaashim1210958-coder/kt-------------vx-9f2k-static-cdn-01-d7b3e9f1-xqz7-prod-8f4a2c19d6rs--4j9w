@@ -86,6 +86,24 @@ class ReaderViewModel(
         }
     }
 
+    /**
+     * Jump straight to a mantra by primary key, without disturbing the
+     * mandal/sukta/mantra-no picker state beyond what applyMantra() already
+     * recomputes. Called from ReaderActivity while Listening Mode is
+     * auto-advancing audio in MantraPlayerService, so the visible Sanskrit
+     * text/meta/bhashya panel always match what's currently playing.
+     *
+     * No-ops if [mantraId] is already the mantra on screen, so repeated
+     * calls from the audio state flow (which ticks every 250ms while
+     * playing) don't reload/re-fetch bhashya content on every tick.
+     */
+    fun jumpToId(mantraId: Int) {
+        if (_state.value.current?.id == mantraId) return
+        viewModelScope.launch {
+            repository.getById(mantraId)?.let { applyMantra(it) }
+        }
+    }
+
     fun jumpLevel1(v: Int) {
         val cur = _state.value.current ?: return
         viewModelScope.launch {
