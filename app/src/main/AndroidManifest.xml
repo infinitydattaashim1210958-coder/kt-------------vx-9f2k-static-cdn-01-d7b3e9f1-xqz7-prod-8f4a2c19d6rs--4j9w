@@ -2,7 +2,19 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Audio streaming -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Already present – skip if exists -->
 
+    <!-- Foreground service for background audio -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <!-- Keep CPU awake while audio plays (screen off) -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Android 13+ notification permission -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:name=".SwadhyayApp"
         android:allowBackup="true"
@@ -55,6 +67,10 @@
             android:name=".presentation.gita.GitaActivity"
             android:exported="false"
             android:theme="@style/Theme.Swadhyay" />
+        <service
+            android:name=".service.MantraPlayerService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="false" />
 
         <!--
           Needed to open a downloaded library HTML book via ACTION_VIEW in
