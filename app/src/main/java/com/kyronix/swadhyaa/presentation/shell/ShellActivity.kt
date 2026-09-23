@@ -40,12 +40,19 @@ import com.kyronix.swadhyaa.ui.theme.GlowBox
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import android.os.Build
 /**
  * App shell: Home · Library · Bookmarks · Search · Settings
  * Implements M8 A–D foundation on one activity (phone-friendly).
  */
 class ShellActivity : AppCompatActivity() {
+
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* either way, continue */ }
 
     private enum class Tab { HOME, LIBRARY, BOOKMARKS, SEARCH, SETTINGS }
 
@@ -65,6 +72,12 @@ class ShellActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
         prefs = UserPrefs(this)
         settingsRepo = SettingsRepository(this)
         val core = CoreDatabase.getInstance(this)
