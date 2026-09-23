@@ -198,19 +198,31 @@ class MantraPlayerService : Service() {
             }
 
             mp.setOnErrorListener { _, what, extra ->
-                val msg = when (what) {
-                    MediaPlayer.MEDIA_ERROR_IO          ->
+                // what=-38 (ENOSYS negated) = MediaPlayer received non-audio content
+                // from the CDN (HTTP 404 page or unsupported redirect target).
+                // This means the specific verse was not recorded / not uploaded —
+                // it is NOT a network failure.
+                val noAudio = (what == -38)
+                val msg = when {
+                    noAudio ->
+                        "এই মন্ত্রের অডিও পাওয়া যায়নি।"
+                    what == MediaPlayer.MEDIA_ERROR_IO ->
                         "ইন্টারনেট সংযোগ ত্রুটি। নেটওয়ার্ক পরীক্ষা করুন।"
-                    MediaPlayer.MEDIA_ERROR_TIMED_OUT   ->
+                    what == MediaPlayer.MEDIA_ERROR_TIMED_OUT ->
                         "সংযোগের সময়সীমা শেষ। পুনরায় চেষ্টা করুন।"
-                    MediaPlayer.MEDIA_ERROR_SERVER_DIED ->
+                    what == MediaPlayer.MEDIA_ERROR_SERVER_DIED ->
                         "সার্ভার সংযোগ বিচ্ছিন্ন।"
                     else ->
                         "অডিও চালাতে সমস্যা হয়েছে। (E$what/$extra)"
                 }
-                Log.e(TAG, "MediaPlayer error: what=$what extra=$extra")
+                Log.e(TAG, "MediaPlayer error: what=$what extra=$extra noAudio=$noAudio")
                 _state.value = MantraPlaybackState.Error(msg)
                 updateNotification()
+                // In Listening Mode a missing recording should not halt the queue —
+                // silently advance to the next mantra after a brief pause.
+                if (noAudio && isListeningMode) {
+                    scope.launch { delay(600); skipToNext() }
+                }
                 true
             }
 
