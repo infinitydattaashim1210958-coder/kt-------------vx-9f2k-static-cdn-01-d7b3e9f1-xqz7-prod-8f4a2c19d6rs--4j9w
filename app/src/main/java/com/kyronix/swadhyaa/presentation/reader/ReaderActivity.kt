@@ -161,6 +161,9 @@ class ReaderActivity : AppCompatActivity() {
     }
 
     // ── UI construction ───────────────────────────────────────────────────
+    // (2026-09-24: made every box in this screen more compact — smaller
+    // padding/margins throughout, and moved the prev/next nav row from the
+    // bottom of the page to right above the mantra-text card, per request.)
 
     private fun buildUi(): ScrollView {
         val root = ScrollView(this).apply {
@@ -169,7 +172,7 @@ class ReaderActivity : AppCompatActivity() {
         }
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(16), dp(16), dp(32))
+            setPadding(dp(14), dp(10), dp(14), dp(16))
         }
 
         // Header
@@ -195,7 +198,7 @@ class ReaderActivity : AppCompatActivity() {
 
         // Veda chips
         val vedaScroll = HorizontalScrollView(this).apply {
-            setPadding(0, dp(12), 0, dp(8))
+            setPadding(0, dp(8), 0, dp(6))
             isHorizontalScrollBarEnabled = false
         }
         vedaChips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -205,21 +208,60 @@ class ReaderActivity : AppCompatActivity() {
         // Jump chips
         jumpRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(4), 0, dp(12))
+            setPadding(0, dp(4), 0, dp(8))
         }
         col.addView(jumpRow)
+
+        // Prev / Next — moved here (was at the very bottom of the page
+        // before) so it's immediately usable without scrolling past the
+        // mantra text + audio player + bhashya section every time.
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 0, 0, dp(10))
+        }
+        btnPrev = Button(this).apply {
+            text = "← আগের মন্ত্র"
+            setTextColor(SAFFRON)
+            textSize = 13f
+            // Material's default elevation/shadow fights visually with a
+            // custom glow border, so both are switched off here.
+            stateListAnimator = null
+            elevation = 0f
+            minHeight = dp(36)
+            setPadding(dp(8), dp(6), dp(8), dp(6))
+            setOnClickListener { vm.prev() }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginEnd = dp(6) }
+        }
+        GlowBox.applyTo(btnPrev, GlowBox.chip(this, color = SAFFRON, cornerRadiusDp = 10f, filled = false))
+        btnNext = Button(this).apply {
+            text = "পরের মন্ত্র →"
+            setTextColor(SAFFRON)
+            textSize = 13f
+            stateListAnimator = null
+            elevation = 0f
+            minHeight = dp(36)
+            setPadding(dp(8), dp(6), dp(8), dp(6))
+            setOnClickListener { vm.next() }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                .apply { marginStart = dp(6) }
+        }
+        GlowBox.applyTo(btnNext, GlowBox.chip(this, color = SAFFRON, cornerRadiusDp = 10f, filled = false))
+        nav.addView(btnPrev)
+        nav.addView(btnNext)
+        col.addView(nav)
 
         // Sanskrit mantra card — glowing border, replacing the old flat panel
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(20), dp(16), dp(20))
+            setPadding(dp(14), dp(14), dp(14), dp(14))
         }
         GlowBox.applyTo(card, GlowBox.panel(this, color = SAFFRON, fillColor = SURFACE))
         sanskritText = TextView(this).apply {
             setTextColor(SAFFRON)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 21f)
             gravity = Gravity.CENTER
-            setLineSpacing(0f, 1.45f)
+            setLineSpacing(0f, 1.3f)
             typeface = devanagariTypeface
             text = "…"
         }
@@ -227,7 +269,7 @@ class ReaderActivity : AppCompatActivity() {
             setTextColor(MUTED)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             gravity = Gravity.CENTER
-            setPadding(0, dp(12), 0, 0)
+            setPadding(0, dp(8), 0, 0)
         }
         card.addView(sanskritText)
         card.addView(metaText)
@@ -241,7 +283,7 @@ class ReaderActivity : AppCompatActivity() {
         GlowBox.applyTo(audioPlayerView, GlowBox.panel(this, color = GOLD, fillColor = SURFACE))
         col.addView(audioPlayerView, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = dp(12) })
+        ).apply { topMargin = dp(10) })
 
         // Hidden until Listening Mode actually starts advancing — the
         // in-app equivalent of the lock-screen glowing-mantra transition
@@ -250,12 +292,12 @@ class ReaderActivity : AppCompatActivity() {
         mantraAnimOverlay = MantraTextAnimView(this).apply { visibility = View.GONE }
         col.addView(mantraAnimOverlay, LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = dp(8) })
+        ).apply { topMargin = dp(6) })
 
         statusText = TextView(this).apply {
             setTextColor(GOLD)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-            setPadding(0, dp(10), 0, dp(4))
+            setPadding(0, dp(6), 0, dp(4))
         }
         col.addView(statusText)
 
@@ -265,7 +307,7 @@ class ReaderActivity : AppCompatActivity() {
         // Language tabs (horizontal scroll)
         val langScroll = HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
-            setPadding(0, dp(8), 0, dp(8))
+            setPadding(0, dp(4), 0, dp(4))
         }
         langTabRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         langScroll.addView(langTabRow)
@@ -277,42 +319,9 @@ class ReaderActivity : AppCompatActivity() {
         // container below this one anymore (see field doc comment above).
         scholarList = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 0, 0, dp(8))
+            setPadding(0, 0, 0, dp(4))
         }
         col.addView(scholarList)
-
-        col.addView(sectionDivider())
-
-        // Prev / Next
-        val nav = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, dp(8), 0, 0)
-        }
-        btnPrev = Button(this).apply {
-            text = "← আগের মন্ত্র"
-            setTextColor(SAFFRON)
-            // Material's default elevation/shadow fights visually with a
-            // custom glow border, so both are switched off here.
-            stateListAnimator = null
-            elevation = 0f
-            setOnClickListener { vm.prev() }
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                .apply { marginEnd = dp(6) }
-        }
-        GlowBox.applyTo(btnPrev, GlowBox.chip(this, color = SAFFRON, cornerRadiusDp = 12f, filled = false))
-        btnNext = Button(this).apply {
-            text = "পরের মন্ত্র →"
-            setTextColor(SAFFRON)
-            stateListAnimator = null
-            elevation = 0f
-            setOnClickListener { vm.next() }
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                .apply { marginStart = dp(6) }
-        }
-        GlowBox.applyTo(btnNext, GlowBox.chip(this, color = SAFFRON, cornerRadiusDp = 12f, filled = false))
-        nav.addView(btnPrev)
-        nav.addView(btnNext)
-        col.addView(nav)
 
         root.addView(col)
         return root
@@ -322,7 +331,7 @@ class ReaderActivity : AppCompatActivity() {
         background = GlowBox.glowLine(SAFFRON)
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT, dp(2)
-        ).apply { topMargin = dp(14); bottomMargin = dp(14) }
+        ).apply { topMargin = dp(8); bottomMargin = dp(8) }
     }
 
     // ── Observation ───────────────────────────────────────────────────────
@@ -405,7 +414,7 @@ class ReaderActivity : AppCompatActivity() {
             val chip = TextView(this).apply {
                 text = v.name
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                setPadding(dp(14), dp(8), dp(14), dp(8))
+                setPadding(dp(12), dp(6), dp(12), dp(6))
                 setTextColor(if (selected) Color.BLACK else IVORY)
                 setOnClickListener { vm.openVeda(v.id) }
             }
@@ -416,7 +425,7 @@ class ReaderActivity : AppCompatActivity() {
             vedaChips.addView(chip, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { marginEnd = dp(8) })
+            ).apply { marginEnd = dp(6) })
         }
     }
 
@@ -433,7 +442,7 @@ class ReaderActivity : AppCompatActivity() {
     private fun addJump(label: String, value: String, options: List<Int>, onPick: (Int) -> Unit) {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(8), dp(12), dp(8))
+            setPadding(dp(8), dp(6), dp(8), dp(6))
             setOnClickListener {
                 if (options.isEmpty()) return@setOnClickListener
                 AlertDialog.Builder(this@ReaderActivity)
@@ -445,15 +454,15 @@ class ReaderActivity : AppCompatActivity() {
         GlowBox.applyTo(box, GlowBox.chip(this, color = SAFFRON, cornerRadiusDp = 10f, filled = false))
         box.addView(TextView(this).apply {
             text = label; setTextColor(MUTED)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f); gravity = Gravity.CENTER
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f); gravity = Gravity.CENTER
         })
         box.addView(TextView(this).apply {
             text = value; setTextColor(IVORY)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             gravity = Gravity.CENTER; typeface = Typeface.DEFAULT_BOLD
         })
         jumpRow.addView(box, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            .apply { marginEnd = dp(6) })
+            .apply { marginEnd = dp(4) })
     }
 
     // ── Language tabs ─────────────────────────────────────────────────────
@@ -473,7 +482,7 @@ class ReaderActivity : AppCompatActivity() {
             val tab = TextView(this).apply {
                 text = langDisplayName(lang)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                setPadding(dp(16), dp(8), dp(16), dp(8))
+                setPadding(dp(12), dp(6), dp(12), dp(6))
                 setTextColor(if (selected) Color.BLACK else IVORY)
                 typeface = if (selected) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
                 setOnClickListener { vm.selectLanguage(lang) }
@@ -485,7 +494,7 @@ class ReaderActivity : AppCompatActivity() {
             langTabRow.addView(tab, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { marginEnd = dp(8) })
+            ).apply { marginEnd = dp(6) })
         }
     }
 
@@ -502,7 +511,7 @@ class ReaderActivity : AppCompatActivity() {
             val row = TextView(this).apply {
                 text = "${scholar.name}$suffix"
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                setPadding(dp(14), dp(12), dp(14), dp(12))
+                setPadding(dp(12), dp(8), dp(12), dp(8))
                 setTextColor(if (isSelected) Color.BLACK else IVORY)
                 setOnClickListener { vm.selectScholar(scholar) }
             }
@@ -513,7 +522,7 @@ class ReaderActivity : AppCompatActivity() {
             scholarList.addView(row, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(6) })
+            ).apply { bottomMargin = dp(4) })
 
             // The fix: insert this scholar's content right here, between
             // their row and the next scholar's row — not after the loop.
@@ -528,12 +537,12 @@ class ReaderActivity : AppCompatActivity() {
     private fun buildBhashyaContent(s: ReaderUiState, scholar: ScholarEntity): LinearLayout {
         val container = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(10), dp(8), dp(10), dp(12))
+            setPadding(dp(10), dp(6), dp(10), dp(8))
         }.also {
             GlowBox.applyTo(it, GlowBox.panel(this, color = GOLD, fillColor = SURFACE))
             it.layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = dp(8) }
+            ).apply { bottomMargin = dp(6) }
         }
 
         val isDownloaded = s.scholarDownloadStatus[scholar.id] == true
@@ -545,7 +554,7 @@ class ReaderActivity : AppCompatActivity() {
                 text = "এই ভাষ্য ডাউনলোড করা হয়নি$sizeKb$entries"
                 setTextColor(MUTED)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                setPadding(0, 0, 0, dp(12))
+                setPadding(0, 0, 0, dp(8))
             })
 
             val progress = s.downloadProgress
@@ -559,7 +568,7 @@ class ReaderActivity : AppCompatActivity() {
                 val btn = TextView(this).apply {
                     text = "ডাউনলোড করুন"
                     setTextColor(Color.BLACK)
-                    setPadding(dp(20), dp(10), dp(20), dp(10))
+                    setPadding(dp(16), dp(8), dp(16), dp(8))
                     gravity = Gravity.CENTER
                     setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                     typeface = Typeface.DEFAULT_BOLD
@@ -578,7 +587,7 @@ class ReaderActivity : AppCompatActivity() {
             container.addView(TextView(this).apply {
                 text = "ভাষ্য লোড হচ্ছে…"; setTextColor(MUTED)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                setPadding(0, dp(8), 0, 0)
+                setPadding(0, dp(6), 0, 0)
             })
             return container
         }
@@ -587,7 +596,7 @@ class ReaderActivity : AppCompatActivity() {
             container.addView(TextView(this).apply {
                 text = s.bhashyaError; setTextColor(VERMILION)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                setPadding(0, dp(8), 0, 0)
+                setPadding(0, dp(6), 0, 0)
             })
             return container
         }
@@ -598,7 +607,7 @@ class ReaderActivity : AppCompatActivity() {
         val headerRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(4), 0, dp(12))
+            setPadding(0, dp(2), 0, dp(8))
         }
         headerRow.addView(TextView(this).apply {
             text = scholar.name
@@ -630,7 +639,7 @@ class ReaderActivity : AppCompatActivity() {
                 setTextColor(SAFFRON)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 typeface = Typeface.DEFAULT_BOLD
-                setPadding(0, dp(12), 0, dp(4))
+                setPadding(0, dp(8), 0, dp(4))
             })
             container.addView(TextView(this).apply {
                 text = field.value
