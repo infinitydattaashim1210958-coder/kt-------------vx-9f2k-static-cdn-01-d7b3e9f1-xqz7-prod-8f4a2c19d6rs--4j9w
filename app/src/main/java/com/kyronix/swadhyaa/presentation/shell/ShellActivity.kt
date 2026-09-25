@@ -133,7 +133,8 @@ class ShellActivity : AppCompatActivity() {
             Tab.LIBRARY to "লাইব্রেরি",
             Tab.BOOKMARKS to "বুকমার্ক",
             Tab.SEARCH to "খুঁজুন",
-            Tab.SETTINGS to "সেটিংস"
+            Tab.SETTINGS to "সেটিংস",
+            Tab.AUDIO to "অডিও শুনুন"
         ).forEach { (tab, label) ->
             val t = TextView(this).apply {
                 text = label
