@@ -183,7 +183,13 @@ class LibraryActivity : AppCompatActivity() {
     }
 
     private fun openBook(book: LibraryBookInfo) {
-        if (book.type == "db") {
+        if (book.type == "rabindra") {
+            startActivity(
+                Intent(this, RabindraPickerActivity::class.java)
+                    .putExtra(RabindraPickerActivity.EXTRA_DB_FILE, book.filename)
+                    .putExtra(RabindraPickerActivity.EXTRA_TITLE, book.title)
+            )
+        } else if (book.type == "db") {
             startActivity(
                 Intent(this, LibraryDbBookReaderActivity::class.java)
                     .putExtra(LibraryDbBookReaderActivity.EXTRA_BOOK_ID, book.id)
