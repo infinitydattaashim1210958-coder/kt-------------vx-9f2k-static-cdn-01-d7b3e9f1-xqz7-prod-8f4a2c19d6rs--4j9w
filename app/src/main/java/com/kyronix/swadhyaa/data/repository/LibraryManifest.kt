@@ -15,18 +15,18 @@ import java.io.IOException
 /**
  * One entry in library_books/manifest.json.
  *
- * type: "html" (repo-hosted interactive HTML page, opened externally —
- * see LibraryHtmlBookRepository) or "db" (db.gz pack merged into
- * MasterDatabase — see LibraryDbBookRepository). Verified directly
- * against lib.js's fetchBlogBooks(): older manifest entries have no type
- * field at all and must default to "html" so they keep working unchanged.
+ * type: "html" or "db".
+ * url: optional override download URL (e.g. a GitHub Release asset).
+ *      When absent the app builds the URL from REPO_RAW_BASE + filename
+ *      as before, so existing entries keep working unchanged.
  */
 data class LibraryBookInfo(
     val id: String,
     val title: String,
     val filename: String,
     val date: String,
-    val type: String
+    val type: String,
+    val url: String? = null          // ← নতুন: Release URL বা যেকোনো direct link
 )
 
 object LibraryManifest {
@@ -36,26 +36,30 @@ object LibraryManifest {
             "-------------vx-9f2k-static-cdn-01-d7b3e9f1-xqz7-prod-8f4a2c19d6rs--4j9w/main/library_books/"
     private const val MANIFEST_URL = REPO_RAW_BASE + "manifest.json"
 
-    fun bookDownloadUrl(filename: String): String = REPO_RAW_BASE + filename
+    /**
+     * Returns the download URL for a book.
+     * If the manifest entry carries an explicit `url`, that wins.
+     * Otherwise falls back to the raw-content CDN path (previous behaviour).
+     */
+    fun bookDownloadUrl(book: LibraryBookInfo): String =
+        book.url?.takeIf { it.isNotBlank() } ?: (REPO_RAW_BASE + book.filename)
 
     private val keyManifestCache = stringPreferencesKey("library_manifest_cache_json")
 
-    private val client by lazy { OkHttpClient.Builder().build() }
+    private val client by lazy {
+        OkHttpClient.Builder()
+            .followRedirects(true)        // GitHub Release redirect স্বয়ংক্রিয়ভাবে follow করবে
+            .followSslRedirects(true)
+            .build()
+    }
 
-    /**
-     * Fetches the live manifest; on any network failure, falls back to
-     * the last successfully-cached copy (matches lib.js exactly, including
-     * its Bengali error message for the "no network and no cache" case —
-     * kept in the source language rather than translated, since it's
-     * user-facing).
-     */
     suspend fun fetch(context: Context): Result<List<LibraryBookInfo>> = withContext(Dispatchers.IO) {
         try {
             val request = Request.Builder().url(MANIFEST_URL).build()
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
                 val body = response.body?.string() ?: throw IOException("Empty response body")
-                val books = parseManifestJson(body) // validate before caching a body that might not even parse
+                val books = parseManifestJson(body)
                 context.dataStore.edit { it[keyManifestCache] = body }
                 Result.success(books)
             }
@@ -73,18 +77,18 @@ object LibraryManifest {
         }
     }
 
-    /** Pure JSON parsing — testable without network or Context. */
     internal fun parseManifestJson(json: String): List<LibraryBookInfo> {
         val obj = JSONObject(json)
         val arr = obj.optJSONArray("books") ?: return emptyList()
         return (0 until arr.length()).map { i ->
             val b = arr.getJSONObject(i)
             LibraryBookInfo(
-                id = b.getString("id"),
-                title = b.getString("title"),
+                id       = b.getString("id"),
+                title    = b.getString("title"),
                 filename = b.getString("filename"),
-                date = b.optString("date", ""),
-                type = b.optString("type", "html")
+                date     = b.optString("date", ""),
+                type     = b.optString("type", "html"),
+                url      = b.optString("url", "").takeIf { it.isNotBlank() }   // ← নতুন
             )
         }
     }
