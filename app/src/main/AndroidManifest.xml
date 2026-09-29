@@ -48,6 +48,10 @@
             android:exported="false"
             android:theme="@style/Theme.Swadhyay" />
         <activity
+            android:name=".presentation.library.RabindraPickerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Swadhyay" />
+        <activity
             android:name=".presentation.library.LibraryDbBookReaderActivity"
             android:exported="false"
             android:theme="@style/Theme.Swadhyay" />
