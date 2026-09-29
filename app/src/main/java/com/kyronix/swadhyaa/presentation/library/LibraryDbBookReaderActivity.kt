@@ -221,7 +221,7 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
         row.addView(TextView(this).apply {
             text = "• • •"; setTextColor(AppColors.muted); typeface = banglaTypeface
             gravity = Gravity.CENTER; setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-            setOnClickListener { showChapterPicker(allChapters) }
+            setOnClickListener { showCascadedPicker(allChapters) }
         }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 0.3f))
 
         row.addView(navButton(
@@ -257,34 +257,123 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
 
     private fun abbrev(s: String): String = if (s.length <= 20) s else s.take(18) + "…"
 
-    // ── Picker ────────────────────────────────────────────────────────────────
+    // ── Picker chip (top of page) ─────────────────────────────────────────────
 
     private fun buildPicker(chapters: List<LibraryChapter>, current: LibraryChapter): TextView {
-        val idx     = chapters.indexOf(current) + 1
         val heading = current.heading?.takeIf { it.isNotBlank() } ?: current.chapterId
         return TextView(this).apply {
-            text = "📑 $heading  ($idx/${chapters.size})"
+            text = "📑 $heading"
             setTextColor(AppColors.saffron); setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             typeface = banglaTypeface; setPadding(dp(12), dp(8), dp(12), dp(8))
             GlowBox.applyTo(this,
                 GlowBox.chip(this@LibraryDbBookReaderActivity,
                     color = AppColors.saffron, cornerRadiusDp = 10f, filled = false), haloDp = 6)
-            setOnClickListener { showChapterPicker(chapters) }
+            setOnClickListener { showCascadedPicker(chapters) }
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply { bottomMargin = dp(16) }
         }
     }
 
-    private fun showChapterPicker(chapters: List<LibraryChapter>) {
+    // ── Cascaded 3-level picker ───────────────────────────────────────────────
+    //
+    //  Level 1  — উপন্যাস / অন্যান্য গদ্যসংগ্রহ   (chapter_id: colN)
+    //  Level 2  — individual work                  (chapter_id: wN)
+    //  Level 3  — chapter / group inside the work  (chapter_id: wNgM)
+    //
+    //  chapter_id patterns are baked into the DB by the build script, so no
+    //  extra table or migration is needed: the Activity infers the hierarchy
+    //  from the IDs already loaded into state.chapters.
+    //
+    private val reCol   = Regex("^col(\\d+)$")
+    private val reWork  = Regex("^w(\\d+)$")
+    private val reGroup = Regex("^w(\\d+)g(\\d+)$")
+
+    private fun showCascadedPicker(chapters: List<LibraryChapter>) {
         dismissPopup()
-        val labels = chapters.map { it.heading?.takeIf { h -> h.isNotBlank() } ?: it.chapterId }
-            .toTypedArray()
-        AlertDialog.Builder(this).setTitle("অধ্যায় নির্বাচন করুন")
-            .setItems(labels) { _, i ->
-                viewModel.selectChapter(chapters[i].chapterId)
-                scrollView.smoothScrollTo(0, 0)
-            }.show()
+
+        // Build the three-level map in one linear scan (chapters are already
+        // sorted by seq, which follows the col→work→group ordering).
+        val colChapters  = mutableListOf<LibraryChapter>()
+        val colToWorks   = linkedMapOf<String, MutableList<LibraryChapter>>()
+        val workToGroups = linkedMapOf<String, MutableList<LibraryChapter>>()
+        var curCol: String? = null
+        var curWork: String? = null
+
+        for (ch in chapters.sortedBy { it.seq ?: 0 }) {
+            when {
+                reCol.matches(ch.chapterId) -> {
+                    colChapters.add(ch)
+                    colToWorks[ch.chapterId] = mutableListOf()
+                    curCol = ch.chapterId
+                    curWork = null
+                }
+                reWork.matches(ch.chapterId) -> {
+                    colToWorks.getOrPut(curCol ?: "col0") { mutableListOf() }.add(ch)
+                    workToGroups[ch.chapterId] = mutableListOf()
+                    curWork = ch.chapterId
+                }
+                reGroup.matches(ch.chapterId) -> {
+                    workToGroups.getOrPut(curWork ?: "w0") { mutableListOf() }.add(ch)
+                }
+            }
+        }
+
+        // ── helpers ──────────────────────────────────────────────────────────
+
+        fun navigate(ch: LibraryChapter) {
+            viewModel.selectChapter(ch.chapterId)
+            scrollView.smoothScrollTo(0, 0)
+        }
+
+        fun label(ch: LibraryChapter) =
+            ch.heading?.takeIf { it.isNotBlank() } ?: ch.chapterId
+
+        fun showGroups(workCh: LibraryChapter) {
+            val groups = workToGroups[workCh.chapterId].orEmpty()
+            if (groups.isEmpty()) { navigate(workCh); return }
+            AlertDialog.Builder(this)
+                .setTitle(label(workCh))
+                .setItems(groups.map { label(it) }.toTypedArray()) { _, i ->
+                    navigate(groups[i])
+                }
+                .show()
+        }
+
+        fun showWorks(colCh: LibraryChapter) {
+            val works = colToWorks[colCh.chapterId].orEmpty()
+            if (works.isEmpty()) { navigate(colCh); return }
+            AlertDialog.Builder(this)
+                .setTitle(label(colCh))
+                .setItems(works.map { label(it) }.toTypedArray()) { _, i ->
+                    showGroups(works[i])
+                }
+                .show()
+        }
+
+        // ── entry point ───────────────────────────────────────────────────────
+
+        when {
+            colChapters.isEmpty() -> {
+                // Fallback: no collection structure found — flat list of groups
+                val items = chapters.filter { reGroup.matches(it.chapterId) }
+                AlertDialog.Builder(this)
+                    .setTitle("অধ্যায় নির্বাচন করুন")
+                    .setItems(items.map { label(it) }.toTypedArray()) { _, i ->
+                        navigate(items[i])
+                    }
+                    .show()
+            }
+            colChapters.size == 1 -> showWorks(colChapters[0])   // skip level-1 dialog
+            else -> {
+                AlertDialog.Builder(this)
+                    .setTitle("বিভাগ নির্বাচন করুন")
+                    .setItems(colChapters.map { label(it) }.toTypedArray()) { _, i ->
+                        showWorks(colChapters[i])
+                    }
+                    .show()
+            }
+        }
     }
 
     // ── Chapter heading ───────────────────────────────────────────────────────
@@ -323,7 +412,6 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
         if (p.isBold)      spannable.setSpan(StyleSpan(Typeface.BOLD),  0, displayText.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         if (p.isUnderline) spannable.setSpan(UnderlineSpan(), 0, displayText.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
 
-        // Ref markers: amber superscript + ClickableSpan
         markerSpans.forEach { marker ->
             val s = marker.start + indentOff
             val e = marker.end   + indentOff
@@ -339,11 +427,10 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
                         ?: p.refs.find { it.refNumber == refNum }?.refNote ?: return
                     showRefPopup(widget, "[$refNum] $note")
                 }
-                override fun updateDrawState(ds: android.text.TextPaint) { /* suppress underline */ }
+                override fun updateDrawState(ds: android.text.TextPaint) { }
             }, s, e, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
 
-        // Restore saved highlight spans
         savedSelections.forEach { sel ->
             val s = sel.selStart + indentOff
             val e = sel.selEnd   + indentOff
@@ -379,24 +466,16 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
                     "বুকমার্ক সংরক্ষিত হয়েছে ✓", android.widget.Toast.LENGTH_SHORT
                 ).show()
             }
-            // ClickableSpan (ref markers) needs LinkMovementMethod;
-            // SelectableBookmarkTextView uses ArrowKeyMovementMethod by default
-            // which handles selection WITHOUT swallowing tap-away.
-            // For ref markers we override movementMethod here only when refs exist.
             if (markerSpans.isNotEmpty()) {
                 movementMethod = object : android.text.method.LinkMovementMethod() {
-                    // Suppress link-following on long press (we want selection instead)
                     override fun onTouchEvent(
                         widget: android.widget.TextView,
                         buffer: Spannable,
                         event: MotionEvent
-                    ): Boolean {
-                        // On ACTION_UP with no selection change, try link click
-                        return super.onTouchEvent(widget, buffer, event)
-                    }
+                    ): Boolean = super.onTouchEvent(widget, buffer, event)
                 }
             }
-            highlightColor = 0x44C850FF.toInt()  // purple selection tint
+            highlightColor = 0x44C850FF.toInt()
         }
 
         tv.layoutParams = LinearLayout.LayoutParams(
@@ -422,7 +501,7 @@ class LibraryDbBookReaderActivity : AppCompatActivity() {
             background  = android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.RECTANGLE
                 cornerRadius = dp(12f); setColor(0xF01A0D1F.toInt())
-                setStroke(dp(1.5f).toInt(), 0xFFBB44FF.toInt())  // purple border
+                setStroke(dp(1.5f).toInt(), 0xFFBB44FF.toInt())
             }
             addView(tv)
         }
