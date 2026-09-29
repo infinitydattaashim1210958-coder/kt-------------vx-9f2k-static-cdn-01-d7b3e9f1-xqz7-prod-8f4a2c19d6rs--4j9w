@@ -10,31 +10,32 @@ import java.io.File
 import java.util.zip.GZIPInputStream
 
 /**
- * Downloads gz-compressed SQLite "packs" (bhashya, Ramayana kanda, Mahabharata parba)
- * from the DB repo on GitHub, decompresses them once, and caches the plain .db under
- * the app's files dir. Every Veda/Ramayana/Mahabharata bhashya feature shares this.
+ * Downloads gz-compressed SQLite "packs" and decompresses them.
  *
- * Repo layout (raw.githubusercontent.com/<REPO>/main/<folder>/<file>):
- *   bhashya_packs/scholar_<id>.db.gz
- *   ramayana-kanpur-iit/ramayana_kanda_<n>.db.gz
- *   mahabharata_kaliprasanna/mahabharata_parba_<n>.db.gz
+ * Two modes:
+ *  - folder/fileName → builds URL from REPO_RAW_BASE (existing behaviour, unchanged)
+ *  - explicitUrl     → downloads directly from that URL (e.g. a GitHub Release asset)
+ *
+ * OkHttp follows redirects automatically (followRedirects=true), so GitHub
+ * Release's 302 redirect to objects.githubusercontent.com is handled transparently.
  */
 object PackDownloadManager {
 
-    // NOTE: confirm this matches the actual default branch / repo slug if a 404 occurs.
     private const val REPO_OWNER = "infinitydattaashim1210958-coder"
-    private const val REPO_NAME = "-------------vx-9f2k-static-cdn-01-d7b3e9f1-xqz7-prod-8f4a2c19d6rs--4j9w"
-    private const val BRANCH = "main"
-    private const val BASE_URL = "https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$BRANCH"
+    private const val REPO_NAME  = "-------------vx-9f2k-static-cdn-01-d7b3e9f1-xqz7-prod-8f4a2c19d6rs--4j9w"
+    private const val BRANCH     = "main"
+    private const val BASE_URL   = "https://raw.githubusercontent.com/$REPO_OWNER/$REPO_NAME/$BRANCH"
 
     private val client by lazy {
-        OkHttpClient.Builder().build()
+        OkHttpClient.Builder()
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
     }
 
     private fun packsDir(context: Context): File =
         File(context.filesDir, "packs").apply { mkdirs() }
 
-    /** True if this pack has already been downloaded & decompressed. */
     fun isDownloaded(context: Context, folder: String, fileName: String): Boolean =
         localDbFile(context, fileName).exists()
 
@@ -44,20 +45,25 @@ object PackDownloadManager {
     }
 
     /**
-     * Downloads (if needed) and returns a readable [SQLiteDatabase] handle for the pack.
-     * @param folder e.g. "bhashya_packs", "ramayana-kanpur-iit", "mahabharata_kaliprasanna"
-     * @param fileName e.g. "scholar_29.db.gz"
+     * Downloads (if needed) and returns an open [SQLiteDatabase].
+     *
+     * @param folder      subfolder under the raw CDN base (ignored when explicitUrl is set)
+     * @param fileName    e.g. "rabindra.db.gz"
+     * @param explicitUrl full download URL override — use for Release assets
      */
     suspend fun openPack(
         context: Context,
         folder: String,
         fileName: String,
+        explicitUrl: String? = null,
         onProgress: ((downloadedBytes: Long, totalBytes: Long) -> Unit)? = null
     ): Result<SQLiteDatabase> = withContext(Dispatchers.IO) {
         try {
             val dest = localDbFile(context, fileName)
             if (!dest.exists()) {
-                download(folder, fileName, dest, onProgress)
+                val url = explicitUrl?.takeIf { it.isNotBlank() }
+                    ?: "$BASE_URL/$folder/$fileName"
+                download(url, dest, onProgress)
             }
             val db = SQLiteDatabase.openDatabase(
                 dest.absolutePath, null, SQLiteDatabase.OPEN_READONLY
@@ -69,18 +75,15 @@ object PackDownloadManager {
     }
 
     private fun download(
-        folder: String,
-        fileName: String,
+        url: String,
         dest: File,
         onProgress: ((Long, Long) -> Unit)?
     ) {
-        val url = "$BASE_URL/$folder/$fileName"
         val request = Request.Builder().url(url).build()
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) {
+            if (!response.isSuccessful)
                 throw java.io.IOException("Download failed (${response.code}) for $url")
-            }
-            val body = response.body ?: throw java.io.IOException("Empty response body for $url")
+            val body = response.body ?: throw java.io.IOException("Empty body for $url")
             val total = body.contentLength()
             val tmpGz = File(dest.parentFile, "${dest.name}.gz.part")
             var downloaded = 0L
@@ -96,7 +99,6 @@ object PackDownloadManager {
                     }
                 }
             }
-            // gunzip into final destination
             GZIPInputStream(tmpGz.inputStream()).use { gzIn ->
                 dest.outputStream().use { out -> gzIn.copyTo(out) }
             }
@@ -104,19 +106,10 @@ object PackDownloadManager {
         }
     }
 
-    /** Clears every cached pack (settings screen "clear downloaded data" affordance). */
     fun clearAll(context: Context) {
         packsDir(context).listFiles()?.forEach { it.delete() }
     }
 
-    /**
-     * Deletes one already-downloaded, decompressed pack file. Needed by
-     * LibraryDbBookRepository, whose flow is download → merge into
-     * MasterDatabase → delete the temp file (matching legacy's
-     * `fs.deleteFile` cleanup after `mergeLibraryBookPack`) — unlike
-     * Veda/Ramayana/Mahabharata, which keep the downloaded pack
-     * permanently and re-query it directly on every access.
-     */
     fun deleteLocalPack(context: Context, fileName: String) {
         localDbFile(context, fileName).delete()
     }
