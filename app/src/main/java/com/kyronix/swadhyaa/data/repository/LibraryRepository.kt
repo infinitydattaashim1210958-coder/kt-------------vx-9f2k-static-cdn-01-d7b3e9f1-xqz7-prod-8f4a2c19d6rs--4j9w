@@ -30,6 +30,7 @@ object LibraryRepository {
             books.map { book ->
                 val downloaded = when (book.type) {
                     "db" -> LibraryDbBookRepository.isDownloaded(context, book.id)
+                    "rabindra" -> com.kyronix.swadhyaa.data.remote.PackDownloadManager.isDownloaded(context, "library_books", book.filename)
                     else -> LibraryHtmlBookRepository.isDownloaded(context, book)
                 }
                 LibraryBookWithStatus(book, if (downloaded) LibraryBookStatus.DOWNLOADED else LibraryBookStatus.NOT_DOWNLOADED)
@@ -44,12 +45,21 @@ object LibraryRepository {
     suspend fun download(context: Context, book: LibraryBookInfo, onProgress: ((String) -> Unit)? = null): Result<Unit> =
         when (book.type) {
             "db" -> LibraryDbBookRepository.downloadAndMerge(context, book, onProgress)
+            "rabindra" -> {
+                val r = com.kyronix.swadhyaa.data.remote.PackDownloadManager.openPack(
+                    context, "library_books", book.filename, explicitUrl = book.url
+                ) { done, total ->
+                    if (total > 0) onProgress?.invoke("ডাউনলোড হচ্ছে… ${(done * 100 / total)}%")
+                }
+                r.fold(onSuccess = { it.close(); Result.success(Unit) }, onFailure = { Result.failure(it) })
+            }
             else -> LibraryHtmlBookRepository.download(context, book, onProgress)
         }
 
     suspend fun delete(context: Context, book: LibraryBookInfo) {
         when (book.type) {
             "db" -> LibraryDbBookRepository.remove(context, book.id)
+            "rabindra" -> com.kyronix.swadhyaa.data.remote.PackDownloadManager.deleteLocalPack(context, book.filename)
             else -> LibraryHtmlBookRepository.delete(context, book.id)
         }
     }
@@ -61,7 +71,7 @@ object LibraryRepository {
      * book.type == "db".
      */
     suspend fun getHtmlShareableUri(context: Context, book: LibraryBookInfo): Uri? {
-        if (book.type == "db") return null
+        if (book.type == "db" || book.type == "rabindra") return null
         val entry = LibraryHtmlBookRepository.getDownloadedManifest(context)[book.id] ?: return null
         return LibraryHtmlBookRepository.getShareableUri(context, entry.filename)
     }
