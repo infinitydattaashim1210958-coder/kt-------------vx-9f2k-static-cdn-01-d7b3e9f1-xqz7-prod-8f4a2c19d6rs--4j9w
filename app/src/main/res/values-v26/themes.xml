@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Swadhyay" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+        <item name="colorPrimary">#8B4513</item>
+        <item name="colorPrimaryVariant">#5D2E0C</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+    </style>
+
+    <!-- Same theme without the system action bar (which showed the app
+         name "স্বাধ্যায়" above every reader). Reader screens draw their own
+         header with the current book / topic / mantra reference instead. -->
+    <style name="Theme.Swadhyay.NoBar" parent="Theme.Swadhyay">
+        <item name="windowActionBar">false</item>
+        <item name="windowNoTitle">true</item>
+        <item name="android:statusBarColor">#0A0A0A</item>
+    </style>
+
+    <!-- Launch screen: pure black, no bars. -->
+    <style name="Theme.Swadhyay.Splash" parent="Theme.Swadhyay.NoBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+    </style>
+</resources>
