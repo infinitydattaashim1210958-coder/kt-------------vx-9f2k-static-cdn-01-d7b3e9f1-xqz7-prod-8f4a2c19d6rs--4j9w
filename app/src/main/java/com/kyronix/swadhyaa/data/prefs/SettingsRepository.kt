@@ -38,7 +38,7 @@ import kotlinx.coroutines.flow.map
 data class ReaderSettings(
     val fontSize: Int = 18,
     val fontFamily: String = "default",
-    val banglaFont: String = "system",
+    val banglaFont: String = "hind_siliguri",
     val devanagariFont: String = "noto_serif_devanagari",
     val theme: String = "auto",
     val accentTheme: String = "gold",
