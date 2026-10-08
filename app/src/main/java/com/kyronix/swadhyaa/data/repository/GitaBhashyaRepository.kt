@@ -50,7 +50,7 @@ object GitaBhashyaRepository {
         scholar: GitaScholarInfo,
         onProgress: ((Long, Long) -> Unit)? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        PackDownloadManager.openPack(context, FOLDER, scholar.packFile, onProgress)
+        PackDownloadManager.openPack(context, FOLDER, scholar.packFile, onProgress = onProgress)
             .map { it.close() } // warm the cache; getBhashya reopens per-call below
     }
 

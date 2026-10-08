@@ -36,7 +36,7 @@ class BhashyaRepository(
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val file = scholar.packFile
             ?: return@withContext Result.failure(IllegalStateException("No pack_file for scholar ${scholar.id}"))
-        PackDownloadManager.openPack(context, "bhashya_packs", file, onProgress)
+        PackDownloadManager.openPack(context, "bhashya_packs", file, onProgress = onProgress)
             .map { it.close() } // just warm the cache; queries reopen per-call below
     }
 

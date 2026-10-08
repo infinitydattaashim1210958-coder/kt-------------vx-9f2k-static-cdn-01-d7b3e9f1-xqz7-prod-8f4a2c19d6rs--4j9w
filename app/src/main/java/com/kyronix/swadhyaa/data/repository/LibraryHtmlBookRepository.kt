@@ -56,7 +56,7 @@ object LibraryHtmlBookRepository {
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             onProgress?.invoke("ডাউনলোড হচ্ছে…")
-            val url = LibraryManifest.bookDownloadUrl(book.filename)
+            val url = LibraryManifest.bookDownloadUrl(book)
             val request = Request.Builder().url(url).build()
             val html = client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw IOException("ডাউনলোড ব্যর্থ (HTTP ${response.code})")

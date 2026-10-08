@@ -88,7 +88,7 @@ object LibraryDbBookRepository {
         onProgress: ((String) -> Unit)? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
         onProgress?.invoke("ডাউনলোড হচ্ছে…")
-        val openResult = PackDownloadManager.openPack(context, FOLDER, book.filename)
+        val openResult = PackDownloadManager.openPack(context, FOLDER, book.filename, explicitUrl = book.url)
         val sourceDb = openResult.getOrElse { return@withContext Result.failure(it) }
 
         try {

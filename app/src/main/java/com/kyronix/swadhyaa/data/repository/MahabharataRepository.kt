@@ -32,7 +32,7 @@ object MahabharataRepository {
         parba: ParbaInfo,
         onProgress: ((Long, Long) -> Unit)? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        PackDownloadManager.openPack(context, FOLDER, parba.packFile, onProgress)
+        PackDownloadManager.openPack(context, FOLDER, parba.packFile, onProgress = onProgress)
             .map { it.close() }
     }
 

@@ -35,7 +35,7 @@ object RamayanaBhashyaRepository {
         kandaId: Int,
         onProgress: ((Long, Long) -> Unit)? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        PackDownloadManager.openPack(context, FOLDER, packFile(kandaId), onProgress)
+        PackDownloadManager.openPack(context, FOLDER, packFile(kandaId), onProgress = onProgress)
             .map { it.close() }
     }
 

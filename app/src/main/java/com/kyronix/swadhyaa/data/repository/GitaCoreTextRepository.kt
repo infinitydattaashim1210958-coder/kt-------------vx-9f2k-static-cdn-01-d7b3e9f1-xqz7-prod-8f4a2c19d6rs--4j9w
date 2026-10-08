@@ -70,7 +70,7 @@ object GitaCoreTextRepository {
         context: Context,
         onProgress: ((Long, Long) -> Unit)? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        PackDownloadManager.openPack(context, FOLDER, GitaManifest.CORE_TEXT_PACK_FILE, onProgress)
+        PackDownloadManager.openPack(context, FOLDER, GitaManifest.CORE_TEXT_PACK_FILE, onProgress = onProgress)
             .map { it.close() }
     }
 
