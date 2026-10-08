@@ -133,8 +133,7 @@ class ShellActivity : AppCompatActivity() {
             Tab.LIBRARY to "লাইব্রেরি",
             Tab.BOOKMARKS to "বুকমার্ক",
             Tab.SEARCH to "খুঁজুন",
-            Tab.SETTINGS to "সেটিংস",
-            Tab.AUDIO to "অডিও শুনুন"
+            Tab.SETTINGS to "সেটিংস"
         ).forEach { (tab, label) ->
             val t = TextView(this).apply {
                 text = label
@@ -851,72 +850,26 @@ class ShellActivity : AppCompatActivity() {
             addView(preview)
         })
 
-        // FONT FAMILY (Devanagari)
+        // FONT FAMILY — fixed (no picker): Bengali = Hind Siliguri,
+        // Sanskrit/Vedic = Noto Serif Devanagari (full svara-mark support).
         content.addView(settingsSection("✏️  FONT FAMILY"))
         content.addView(card {
             addView(TextView(this@ShellActivity).apply {
-                text = "সংস্কৃত ফন্ট (মন্ত্র)"
+                text = "বাংলা ফন্ট: Hind Siliguri"
                 setTextColor(AppColors.ivory); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                typeface = Typeface.DEFAULT_BOLD; setPadding(0, 0, 0, dp(4))
+                typeface = FontManager.banglaBold(this@ShellActivity); setPadding(0, 0, 0, dp(6))
             })
             addView(TextView(this@ShellActivity).apply {
-                text = "উদাত্ত-অনুদাত্ত চিহ্নের জন্য Noto Serif/Sans বা Tiro Sanskrit বেছে নিন"
-                setTextColor(AppColors.muted); setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f); setPadding(0, 0, 0, dp(10))
-            })
-            val devaCol = LinearLayout(this@ShellActivity).apply { orientation = LinearLayout.VERTICAL }
-            FontManager.DEVANAGARI_FONTS.forEach { entry ->
-                val isSelected = entry.id == settings.devanagariFont
-                // ── FIX: create label and preview separately, add to row, add row to col ──
-                val label = TextView(this@ShellActivity).apply {
-                    text = (if (isSelected) "● " else "○ ") + entry.displayName +
-                        (if (!entry.supportsVedicAccents) " ⚠ স্বরচিহ্ন সীমিত" else "")
-                    setTextColor(if (isSelected) AppColors.goldBright else AppColors.muted)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                    setPadding(dp(4), dp(6), dp(8), dp(6))
-                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                }
-                val preview = TextView(this@ShellActivity).apply {
-                    text = "अ॒ग्निमी॑ळे"
-                    setTextColor(AppColors.saffron)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-                    if (entry.id != "system") typeface = entry.typeface(this@ShellActivity)
-                    setPadding(0, dp(6), dp(4), dp(6))
-                }
-                val row = LinearLayout(this@ShellActivity).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    setOnClickListener {
-                        lifecycleScope.launch { settingsRepo.setDevanagariFont(entry.id); showSettingsScreen("reader_prefs") }
-                    }
-                }
-                row.addView(label)
-                row.addView(preview)
-                devaCol.addView(row)  // add row (not label) to col — fixes double-addView crash
-            }
-            addView(devaCol)
-        })
-        content.addView(card {
-            addView(TextView(this@ShellActivity).apply {
-                text = "বাংলা ফন্ট"
+                text = "সংস্কৃত ফন্ট: Noto Serif Devanagari (উদাত্ত-অনুদাত্ত চিহ্নসহ)"
                 setTextColor(AppColors.ivory); setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                typeface = Typeface.DEFAULT_BOLD; setPadding(0, 0, 0, dp(10))
+                typeface = FontManager.banglaTypeface(this@ShellActivity, FontManager.BANGLA_ID)
+                setPadding(0, 0, 0, dp(6))
             })
-            val banglaCol = LinearLayout(this@ShellActivity).apply { orientation = LinearLayout.VERTICAL }
-            FontManager.BANGLA_FONTS.forEach { entry ->
-                val isSelected = entry.id == settings.banglaFont
-                val tv = TextView(this@ShellActivity).apply {
-                    text = (if (isSelected) "● " else "○ ") + entry.displayName
-                    setTextColor(if (isSelected) AppColors.goldBright else AppColors.muted)
-                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-                    if (entry.id != "system") typeface = entry.typeface(this@ShellActivity)
-                    setPadding(dp(4), dp(6), dp(4), dp(6))
-                    setOnClickListener {
-                        lifecycleScope.launch { settingsRepo.setBanglaFont(entry.id); showSettingsScreen("reader_prefs") }
-                    }
-                }
-                banglaCol.addView(tv)
-            }
-            addView(banglaCol)
+            addView(TextView(this@ShellActivity).apply {
+                text = "অ॒ग्निमी॑ळे पु॒रोहि॑तं"
+                setTextColor(AppColors.saffron); setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+                typeface = FontManager.devanagariTypeface(this@ShellActivity, FontManager.DEVANAGARI_ID)
+            })
         })
 
         // LAYOUT
