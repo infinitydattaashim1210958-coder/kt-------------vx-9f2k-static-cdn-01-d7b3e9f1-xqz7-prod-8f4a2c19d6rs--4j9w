@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Needed to create / overwrite the dev-latest GitHub Release
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,13 +28,18 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      # Cache the debug keystore so every build is signed with the SAME key
+      # (required for seamless in-app APK updates — without this each build
+      # gets a fresh key and the installer forces an uninstall/reinstall).
+      - name: Cache debug keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # ── Fetch bundled DBs from the DB repo Release (mirrors legacy
-      # build.yml — this step was previously missing entirely, which made
-      # the decompress step below fail on every run since the .gz files
-      # were never present in source control).
       - name: Download core databases from DB repo Release v1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -48,7 +57,6 @@ jobs:
           cd app/src/main/assets/databases
           gunzip -k -f core.db.gz
           gunzip -k -f ramayana_core.db.gz
-          # Remove the .gz files so only .db remains (avoids duplicate resource error)
           rm -f core.db.gz ramayana_core.db.gz
           ls -lh
           test -f core.db
@@ -66,24 +74,51 @@ jobs:
       - name: Write local.properties
         run: echo "gemini_api_key=${{ secrets.GEMINI_API_KEY }}" >> local.properties
 
-      # ── Flavor-qualified task names: "dev" is the side-load flavor
-      # (com.kyronix.swadhyaa.dev) actively used for testing against the
-      # still-installed legacy app. CI builds/tests this flavor by default.
-      # Swap to prodDebug/prodRelease explicitly when cutting a real release
-      # candidate — never let assembleDebug (unqualified) run ambiguously
-      # across both flavors in a release pipeline.
       - name: Run unit tests (includes real DB count verification)
         run: ./gradlew :app:testDevDebugUnitTest --stacktrace
 
       - name: Assemble dev debug APK
+        env:
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: ./gradlew :app:assembleDevDebug --stacktrace
 
+      # Keep the artifact upload for manual downloads (3-day retention)
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: swadhyay-dev-debug-apk
           path: app/build/outputs/apk/dev/debug/*.apk
           retention-days: 3
+
+      # Create a version.json the app reads to detect updates
+      - name: Create version.json
+        run: |
+          echo '{
+            "buildNumber": ${{ github.run_number }},
+            "buildDate": "${{ github.event.head_commit.timestamp }}",
+            "apkName": "app-dev-debug.apk"
+          }' > version.json
+          cat version.json
+
+      # Publish / overwrite the dev-latest release so the app can always
+      # find the latest APK at a fixed URL.  Pull requests are skipped
+      # (they may not have write permission to the repo).
+      - name: Publish dev-latest release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Delete the old dev-latest release + tag (ignore if absent)
+          gh release delete dev-latest --yes --cleanup-tag 2>/dev/null || true
+          sleep 3
+          gh release create dev-latest \
+            --title "স্বাধ্যায় Dev #${{ github.run_number }}" \
+            --notes "Auto-build on push. buildNumber: ${{ github.run_number }}" \
+            --prerelease \
+            "app/build/outputs/apk/dev/debug/app-dev-debug.apk#app-dev-debug.apk" \
+            "version.json#version.json"
+          echo "Release published: dev-latest  build=${{ github.run_number }}"
 
       - name: Print verification summary
         if: success()
@@ -96,4 +131,5 @@ jobs:
           echo "kandas=6"
           echo "shlokas=17802"
           echo "APK BUILD PASSED"
+          echo "RELEASE: dev-latest build=${{ github.run_number }}"
           echo "========================================"
