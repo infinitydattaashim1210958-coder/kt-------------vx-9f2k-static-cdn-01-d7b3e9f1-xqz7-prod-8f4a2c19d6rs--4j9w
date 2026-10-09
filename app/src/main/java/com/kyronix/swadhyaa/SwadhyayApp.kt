@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.ui.theme.AppColors
+import com.kyronix.swadhyaa.ui.theme.FontEnforcer
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 
@@ -45,6 +46,9 @@ class SwadhyayApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        // Hind Siliguri / Noto Serif Devanagari everywhere — never the system font.
+        FontEnforcer.install(this)
 
         try {
             val accent = runBlocking { SettingsRepository(this@SwadhyayApp).settingsFlow.first().accentTheme }
