@@ -4,6 +4,10 @@ import android.app.Application
 import android.util.Log
 import com.kyronix.swadhyaa.data.prefs.SettingsRepository
 import com.kyronix.swadhyaa.ui.theme.AppColors
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
+import com.kyronix.swadhyaa.data.update.AppUpdateWorker
 import com.kyronix.swadhyaa.ui.theme.FontEnforcer
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -49,6 +53,20 @@ class SwadhyayApp : Application() {
 
         // Hind Siliguri / Noto Serif Devanagari everywhere — never the system font.
         FontEnforcer.install(this)
+
+        // Notification channel for in-app update alerts (required API 26+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                AppUpdateWorker.CHANNEL_ID,
+                AppUpdateWorker.CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_DEFAULT
+            ).apply { description = "নতুন বিল্ড পাওয়া গেলে জানায়" }
+            (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
+                .createNotificationChannel(channel)
+        }
+
+        // Background periodic update checker (every 6 h, Wi-Fi or mobile data)
+        AppUpdateWorker.schedule(this)
 
         try {
             val accent = runBlocking { SettingsRepository(this@SwadhyayApp).settingsFlow.first().accentTheme }
