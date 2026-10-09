@@ -76,6 +76,49 @@ class DatabaseVerificationTest {
         }
     }
 
+    /**
+     * Diagnostic only (no assertions on content): prints whether the
+     * `sanskrit_swara` column really carries Vedic accent marks
+     * (U+0951 udatta-mark/U+0952 anudatta and U+1CD0-1CFF), so the CI log
+     * shows whether the reader should display it instead of plain
+     * `sanskrit_text`.
+     */
+    @Test
+    fun coreDatabase_swaraColumnDiagnostics() {
+        val dbFile = locateAsset("core.db")
+        DriverManager.getConnection("jdbc:sqlite:${dbFile.absolutePath}").use { conn ->
+            var total = 0
+            var swaraWithMarks = 0
+            var plainWithMarks = 0
+            var swaraBlank = 0
+            var sample = ""
+            conn.createStatement().use { st ->
+                st.executeQuery("SELECT sanskrit_text, sanskrit_swara FROM mantras").use { rs ->
+                    while (rs.next()) {
+                        total++
+                        val plain = rs.getString(1) ?: ""
+                        val swara = rs.getString(2) ?: ""
+                        if (swara.isBlank()) swaraBlank++
+                        if (hasVedicMark(swara)) {
+                            swaraWithMarks++
+                            if (sample.isEmpty()) sample = swara.take(80)
+                        }
+                        if (hasVedicMark(plain)) plainWithMarks++
+                    }
+                }
+            }
+            println("SWARA DIAGNOSTICS")
+            println("  mantras total            = $total")
+            println("  sanskrit_swara blank     = $swaraBlank")
+            println("  sanskrit_swara has marks = $swaraWithMarks")
+            println("  sanskrit_text  has marks = $plainWithMarks")
+            println("  first swara sample       = $sample")
+        }
+    }
+
+    private fun hasVedicMark(s: String): Boolean =
+        s.any { it == '\u0951' || it == '\u0952' || it in '\u1CD0'..'\u1CFF' }
+
     // ── helpers ──────────────────────────────────────────────────────
 
     private fun locateAsset(name: String): File {
