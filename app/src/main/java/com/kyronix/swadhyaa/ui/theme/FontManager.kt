@@ -88,17 +88,17 @@ object FontManager {
 
     @Volatile private var banglaBoldCached: Typeface? = null
 
-    /** Hind Siliguri Bold. */
+    /**
+     * Hind Siliguri Bold — synthesised from the single Regular TTF via
+     * Typeface.create(…, Typeface.BOLD).  No separate bold .ttf needed:
+     * only one font file (hind_siliguri_regular.ttf) lives in res/font/.
+     */
     fun banglaBold(context: Context): Typeface {
         banglaBoldCached?.let { return it }
         return synchronized(this) {
             banglaBoldCached ?: run {
-                val tf = try {
-                    ResourcesCompat.getFont(context.applicationContext, R.font.hind_siliguri_bold)
-                        ?: Typeface.DEFAULT_BOLD
-                } catch (e: Exception) {
-                    Typeface.DEFAULT_BOLD
-                }
+                val base = banglaEntry(BANGLA_ID).typeface(context)
+                val tf = Typeface.create(base, Typeface.BOLD)
                 if (tf !== Typeface.DEFAULT_BOLD) register(tf)
                 banglaBoldCached = tf
                 tf
