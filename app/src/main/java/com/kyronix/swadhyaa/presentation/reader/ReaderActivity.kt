@@ -187,13 +187,21 @@ class ReaderActivity : AppCompatActivity() {
             setPadding(dp(4), dp(4), dp(16), dp(4))
             setOnClickListener { finish() }
         })
+        // Centered "Rigveda 1/1/1"-style reference title (the system
+        // action bar with the app name is hidden for this screen — see
+        // Theme.Swadhyay.NoBar in themes.xml).
         titleBar = TextView(this).apply {
             setTextColor(IVORY)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-            typeface = Typeface.DEFAULT_BOLD
+            typeface = FontManager.banglaBold(this@ReaderActivity)
+            gravity = Gravity.CENTER
             text = "…"
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
         }
         header.addView(titleBar)
+        // Invisible spacer, same width as the back arrow, keeps the title
+        // visually centered.
+        header.addView(View(this), LinearLayout.LayoutParams(dp(44), 1))
         col.addView(header)
 
         // Veda chips
@@ -334,6 +342,20 @@ class ReaderActivity : AppCompatActivity() {
         ).apply { topMargin = dp(8); bottomMargin = dp(8) }
     }
 
+    /**
+     * The mantra text to show. core.db keeps two columns: `sanskrit_text`
+     * (plain, no accent marks) and `sanskrit_swara` (same mantra WITH the
+     * Vedic svara marks — udatta/anudatta/svarita). The reader used to show
+     * only the plain column, which is why ॒ ॑ never appeared no matter which
+     * font was chosen. Prefer the svara column; fall back to plain text if
+     * it is empty or isn't Devanagari.
+     */
+    private fun mantraDisplayText(m: com.kyronix.swadhyaa.domain.model.MantraContent): String {
+        val sw = m.sanskritSwara
+        if (!sw.isNullOrBlank() && sw.any { it in '\u0900'..'\u097F' }) return sw
+        return m.sanskrit
+    }
+
     // ── Observation ───────────────────────────────────────────────────────
 
     private fun observe() {
@@ -345,7 +367,7 @@ class ReaderActivity : AppCompatActivity() {
                     val m = s.current ?: return@collect
 
                     titleBar.text = m.refLabel
-                    sanskritText.text = m.sanskrit.ifBlank { "(text unavailable)" }
+                    sanskritText.text = mantraDisplayText(m).ifBlank { "(text unavailable)" }
                     metaText.text = listOfNotNull(
                         m.devata?.takeIf { it.isNotBlank() }?.let { "দেবতা: $it" },
                         m.rishi?.takeIf { it.isNotBlank() }?.let { "ঋষি: $it" },
