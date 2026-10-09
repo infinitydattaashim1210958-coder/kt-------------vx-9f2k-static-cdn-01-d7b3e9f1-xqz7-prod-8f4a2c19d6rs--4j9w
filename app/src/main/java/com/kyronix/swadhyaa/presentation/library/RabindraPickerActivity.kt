@@ -399,7 +399,7 @@ class RabindraPickerActivity : AppCompatActivity() {
     // Generic searchable list dialog
     // ══════════════════════════════════════════════════════════════════
     private fun showSearchList(title: String, all: List<String>, searchable: Boolean, onPick: (Int) -> Unit) {
-        val shown = ArrayList<Int>(all.indices)
+        val shown = ArrayList<Int>()
         val listAdapter = object : ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, ArrayList<String>()) {
             override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                 val tv = (convertView as? TextView) ?: TextView(context).apply {
