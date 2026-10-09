@@ -21,8 +21,11 @@ android {
         applicationId = "com.kyronix.swadhyaa"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+        versionName = "1.0.${System.getenv("GITHUB_RUN_NUMBER") ?: "0"}"
+        buildConfigField("String", "GITHUB_REPO",
+            "\"${System.getenv("GITHUB_REPOSITORY") ?: ""}\""
+        )
         buildConfigField("String", "GEMINI_API_KEY", "\"${localProps.getProperty("gemini_api_key", "")}\"")
     }
 
@@ -71,6 +74,7 @@ dependencies {
     // MediaSession + MediaStyle notification support
     implementation("androidx.media:media:1.7.0")
 
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
     testImplementation("org.json:json:20240303")
