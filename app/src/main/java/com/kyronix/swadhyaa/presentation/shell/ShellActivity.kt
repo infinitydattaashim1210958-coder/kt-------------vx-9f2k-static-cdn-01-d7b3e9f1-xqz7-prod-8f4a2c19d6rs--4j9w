@@ -45,7 +45,6 @@ import android.content.pm.PackageManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import android.os.Build
-import android.view.View
 import android.widget.FrameLayout
 import android.widget.ProgressBar
 import androidx.core.content.FileProvider
@@ -135,7 +134,7 @@ class ShellActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         if (intent.getBooleanExtra(EXTRA_SHOW_UPDATE, false)) {
-            openTab(Tab.SETTINGS)
+            show(Tab.SETTINGS)
             refreshUpdateCard()
         }
     }
@@ -144,7 +143,7 @@ class ShellActivity : AppCompatActivity() {
         super.onResume()
         if (intent.getBooleanExtra(EXTRA_SHOW_UPDATE, false)) {
             intent.removeExtra(EXTRA_SHOW_UPDATE)
-            openTab(Tab.SETTINGS)
+            show(Tab.SETTINGS)
             refreshUpdateCard()
         }
         if (justCreated) {
@@ -872,8 +871,8 @@ class ShellActivity : AppCompatActivity() {
                             val src = body.source()
                             while (true) {
                                 val read = src.read(buf)
-                                if (read == -1L) break
-                                out.write(buf, 0, read.toInt())
+                                if (read == -1) break
+                                out.write(buf, 0, read)
                                 downloaded += read
                                 val pct = if (total > 0) (downloaded * 100 / total).toInt() else 0
                                 withContext(Dispatchers.Main) {
