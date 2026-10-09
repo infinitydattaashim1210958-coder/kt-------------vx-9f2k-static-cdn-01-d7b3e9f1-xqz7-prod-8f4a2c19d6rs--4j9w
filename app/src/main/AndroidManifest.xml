@@ -29,7 +29,7 @@
         <activity
             android:name=".presentation.splash.SplashActivity"
             android:exported="true"
-            android:theme="@style/Theme.Swadhyay">
+            android:theme="@style/Theme.Swadhyay.Splash">
             <intent-filter>
               <action android:name="android.intent.action.MAIN" />
               <category android:name="android.intent.category.LAUNCHER" />
@@ -42,7 +42,7 @@
         <activity
             android:name=".presentation.reader.ReaderActivity"
             android:exported="false"
-            android:theme="@style/Theme.Swadhyay" />
+            android:theme="@style/Theme.Swadhyay.NoBar" />
         <activity
             android:name=".presentation.library.LibraryActivity"
             android:exported="false"
@@ -58,19 +58,19 @@
         <activity
             android:name=".presentation.library.LibraryHtmlBookReaderActivity"
             android:exported="false"
-            android:theme="@style/Theme.Swadhyay" />
+            android:theme="@style/Theme.Swadhyay.NoBar" />
         <activity
             android:name=".presentation.ramayana.RamayanaActivity"
             android:exported="false"
-            android:theme="@style/Theme.Swadhyay" />
+            android:theme="@style/Theme.Swadhyay.NoBar" />
         <activity
             android:name=".presentation.mahabharata.MahabharataActivity"
             android:exported="false"
-            android:theme="@style/Theme.Swadhyay" />
+            android:theme="@style/Theme.Swadhyay.NoBar" />
         <activity
             android:name=".presentation.gita.GitaActivity"
             android:exported="false"
-            android:theme="@style/Theme.Swadhyay" />
+            android:theme="@style/Theme.Swadhyay.NoBar" />
         <service
             android:name=".service.MantraPlayerService"
             android:foregroundServiceType="mediaPlayback"
