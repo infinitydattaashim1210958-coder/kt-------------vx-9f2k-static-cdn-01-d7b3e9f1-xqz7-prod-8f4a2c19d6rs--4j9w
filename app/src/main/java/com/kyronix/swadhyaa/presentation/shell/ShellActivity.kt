@@ -45,6 +45,15 @@ import android.content.pm.PackageManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import android.os.Build
+import android.view.View
+import android.widget.FrameLayout
+import android.widget.ProgressBar
+import androidx.core.content.FileProvider
+import com.kyronix.swadhyaa.data.update.UpdateChecker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 /**
  * App shell: Home · Library · Bookmarks · Search · Settings
  * Implements M8 A–D foundation on one activity (phone-friendly).
@@ -53,6 +62,10 @@ class ShellActivity : AppCompatActivity() {
 
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* either way, continue */ }
+
+    companion object {
+        const val EXTRA_SHOW_UPDATE = "show_update"
+    }
 
     private enum class Tab { HOME, LIBRARY, BOOKMARKS, SEARCH, SETTINGS }
 
@@ -67,6 +80,9 @@ class ShellActivity : AppCompatActivity() {
     private var searchJob: Job? = null
     private var renderJob: Job? = null
     private var settingsScreen: String? = null
+    // ── In-app update ─────────────────────────────────────────────────────
+    private var updateCardContainer: android.widget.FrameLayout? = null
+
     private val density by lazy { resources.displayMetrics.density }
     private fun dp(v: Int) = (v * density).toInt()
 
@@ -115,8 +131,22 @@ class ShellActivity : AppCompatActivity() {
 
     private var justCreated = false
 
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra(EXTRA_SHOW_UPDATE, false)) {
+            openTab(Tab.SETTINGS)
+            refreshUpdateCard()
+        }
+    }
+
     override fun onResume() {
         super.onResume()
+        if (intent.getBooleanExtra(EXTRA_SHOW_UPDATE, false)) {
+            intent.removeExtra(EXTRA_SHOW_UPDATE)
+            openTab(Tab.SETTINGS)
+            refreshUpdateCard()
+        }
         if (justCreated) {
             // onCreate already rendered the current tab; skip the
             // redundant re-render Android triggers on first resume.
@@ -700,6 +730,16 @@ class ShellActivity : AppCompatActivity() {
         content.addView(settingsSection("⭐  ABOUT"))
         content.addView(settingsRow("🕉", "About স্বাধ্যায়") { showSettingsScreen("about") })
 
+        // ── UPDATE ───────────────────────────────────────────────────────
+        content.addView(settingsSection("🔄  আপডেট"))
+        val frame = FrameLayout(this)
+        updateCardContainer = frame
+        content.addView(frame, android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+        refreshUpdateCard()
+
         // Footer
         content.addView(TextView(this).apply {
             text = "স্বাধ্যায় v1.0.0 · Build 1\nDeveloped by Ashim Datta\n© Copyright & Preservation\nAll rights reserved. This digital work is protected\nand preserved for educational, spiritual and\nresearch purposes.\n\nKyronix Innovation Group (KIG)\nAshim Datta\nFounder & CEO"
@@ -708,6 +748,166 @@ class ShellActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setPadding(0, dp(24), 0, dp(8))
         })
+    }
+
+    // ── In-app update card ───────────────────────────────────────────────
+
+    private fun refreshUpdateCard() {
+        val container = updateCardContainer ?: return
+        container.removeAllViews()
+        val card = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(14), dp(10), dp(14), dp(12))
+        }
+        com.kyronix.swadhyaa.ui.theme.GlowBox.applyTo(
+            card,
+            com.kyronix.swadhyaa.ui.theme.GlowBox.panel(this,
+                color = AppColors.gold,
+                fillColor = AppColors.surface)
+        )
+
+        val saved = UpdateChecker.getSaved(this)
+
+        val statusTv = TextView(this).apply {
+            setTextColor(AppColors.ivory)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+        val subTv = TextView(this).apply {
+            setTextColor(AppColors.muted)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(0, dp(2), 0, dp(8))
+        }
+
+        if (saved != null) {
+            statusTv.text = "নতুন আপডেট পাওয়া গেছে 🎉"
+            subTv.text = "বিল্ড #${saved.availableBuild} (বর্তমান: #${saved.currentBuild})"
+        } else {
+            statusTv.text = "অ্যাপ আপ-টু-ডেট"
+            subTv.text = "বর্তমান বিল্ড: #${com.kyronix.swadhyaa.BuildConfig.VERSION_CODE}"
+        }
+        card.addView(statusTv)
+        card.addView(subTv)
+
+        // Progress bar (hidden until download starts)
+        val progressBar = ProgressBar(this, null,
+            android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = false; max = 100; progress = 0
+            visibility = View.GONE
+        }
+        val progressTv = TextView(this).apply {
+            setTextColor(AppColors.gold)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            visibility = View.GONE
+        }
+        card.addView(progressBar, android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply { bottomMargin = dp(4) })
+        card.addView(progressTv)
+
+        // Action button
+        val btn = TextView(this).apply {
+            text = if (saved != null) "ডাউনলোড ও ইন্সটল করুন" else "এখনই চেক করুন"
+            setTextColor(android.graphics.Color.BLACK)
+            gravity = android.view.Gravity.CENTER
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            setOnClickListener {
+                if (saved != null) {
+                    startDownloadAndInstall(saved, progressBar, progressTv, this)
+                } else {
+                    text = "চেক করছে…"
+                    isEnabled = false
+                    lifecycleScope.launch {
+                        UpdateChecker.check(this@ShellActivity, force = true)
+                        refreshUpdateCard()
+                    }
+                }
+            }
+        }
+        com.kyronix.swadhyaa.ui.theme.GlowBox.applyTo(
+            btn, com.kyronix.swadhyaa.ui.theme.GlowBox.chip(
+                this, color = AppColors.gold,
+                cornerRadiusDp = 12f, filled = true)
+        )
+        card.addView(btn, android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        ))
+
+        container.addView(card, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        ).apply { topMargin = dp(4) })
+    }
+
+    private fun startDownloadAndInstall(
+        info: UpdateChecker.UpdateInfo,
+        bar: ProgressBar, label: TextView, btn: TextView
+    ) {
+        bar.visibility = View.VISIBLE
+        label.visibility = View.VISIBLE
+        btn.text = "ডাউনলোড হচ্ছে…"
+        btn.isEnabled = false
+
+        lifecycleScope.launch {
+            try {
+                val apkFile = File(cacheDir, "updates/app-dev-debug.apk")
+                apkFile.parentFile?.mkdirs()
+
+                withContext(Dispatchers.IO) {
+                    val client = okhttp3.OkHttpClient.Builder()
+                        .followRedirects(true)
+                        .build()
+                    val req = okhttp3.Request.Builder().url(info.apkUrl).build()
+                    client.newCall(req).execute().use { resp ->
+                        val body = resp.body
+                            ?: throw Exception("Empty response")
+                        val total = body.contentLength()
+                        var downloaded = 0L
+                        val buf = ByteArray(8192)
+                        FileOutputStream(apkFile).use { out ->
+                            val src = body.source()
+                            while (true) {
+                                val read = src.read(buf)
+                                if (read == -1L) break
+                                out.write(buf, 0, read.toInt())
+                                downloaded += read
+                                val pct = if (total > 0) (downloaded * 100 / total).toInt() else 0
+                                withContext(Dispatchers.Main) {
+                                    bar.progress = pct
+                                    label.text = "${pct}% (${downloaded / 1024} KB)"
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Fire the system installer
+                val uri = FileProvider.getUriForFile(
+                    this@ShellActivity,
+                    "${packageName}.fileprovider",
+                    apkFile
+                )
+                val install = android.content.Intent(
+                    android.content.Intent.ACTION_VIEW
+                ).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(install)
+                UpdateChecker.clearSaved(this@ShellActivity)
+
+            } catch (e: Exception) {
+                bar.visibility = View.GONE
+                label.visibility = View.GONE
+                btn.text = "ত্রুটি হয়েছে — আবার চেষ্টা করুন"
+                btn.isEnabled = true
+            }
+        }
     }
 
     // ── Settings sub-screens ───────────────────────────────────────────────
