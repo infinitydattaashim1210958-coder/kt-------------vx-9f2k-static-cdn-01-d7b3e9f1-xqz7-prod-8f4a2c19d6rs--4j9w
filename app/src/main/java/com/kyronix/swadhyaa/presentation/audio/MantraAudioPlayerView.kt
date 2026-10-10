@@ -147,7 +147,7 @@ class MantraAudioPlayerView @JvmOverloads constructor(
             setPadding(dp(6), dp(2), dp(4), dp(2))
             background = GradientDrawable().apply {
                 shape        = GradientDrawable.RECTANGLE
-                cornerRadius = dp(8f)
+                cornerRadius = dp(8f).toFloat()
                 setColor(Color.argb(40, 255, 154, 60))  // subtle saffron tint
             }
             setOnClickListener {
