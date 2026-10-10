@@ -25,7 +25,7 @@ import com.kyronix.swadhyaa.ui.theme.AppColors
 /**
  * শাস্ত্র-সহায়ক — Puter.js-powered, database-grounded scripture agent.
  *
- *  - The chat UI + agent pipeline are web assets (assets/agent/*) served over https://appassets.androidplatform.net
+ *  - The chat UI + agent pipeline are web assets (the assets/agent folder) served over https://appassets.androidplatform.net
  *    through WebViewAssetLoader. Puter identifies an app by its web origin, and file:// has none, so a real
  *    https origin is required for sign-in to work.
  *  - AI calls (puter.ai.chat) run in that page and are billed to the signed-in USER's Puter account
@@ -43,6 +43,9 @@ class AgentActivity : AppCompatActivity() {
         WebViewAssetLoader.Builder()
             .setDomain(AGENT_HOST)
             .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            // Serves res/font/hind_siliguri_regular.ttf (already bundled for the native UI) so the
+            // page doesn't need its own copy of the font in assets/.
+            .addPathHandler("/res/", WebViewAssetLoader.ResourcesPathHandler(this))
             .build()
     }
 
