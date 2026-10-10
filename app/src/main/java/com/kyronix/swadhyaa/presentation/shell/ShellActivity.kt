@@ -31,6 +31,7 @@ import com.kyronix.swadhyaa.presentation.library.LibraryDbBookReaderActivity
 import com.kyronix.swadhyaa.presentation.library.LibraryHtmlBookReaderActivity
 import com.kyronix.swadhyaa.domain.model.VedaSummary
 import com.kyronix.swadhyaa.presentation.mahabharata.MahabharataActivity
+import com.kyronix.swadhyaa.presentation.agent.AgentActivity
 import com.kyronix.swadhyaa.presentation.gita.GitaActivity
 import com.kyronix.swadhyaa.presentation.ramayana.RamayanaActivity
 import com.kyronix.swadhyaa.presentation.reader.ReaderActivity
@@ -232,6 +233,7 @@ class ShellActivity : AppCompatActivity() {
         data object Mahabharata : HomeAction()
         data object Gita : HomeAction()
         data object Library : HomeAction()
+        data object Agent : HomeAction()
         data object Soon : HomeAction()
     }
 
@@ -241,6 +243,7 @@ class ShellActivity : AppCompatActivity() {
         HomeSection("🏹", "রামায়ণ", HomeAction.Ramayana),
         HomeSection("⚔️", "মহাভারত", HomeAction.Mahabharata),
         HomeSection("📿", "শ্রীমদ্ভগবদ্গীতা", HomeAction.Gita),
+        HomeSection("✦", "শাস্ত্র-সহায়ক", HomeAction.Agent),
         HomeSection("📖", "পুরাণ", HomeAction.Soon),
         HomeSection("🔥", "ব্রাহ্মণ", HomeAction.Soon),
         HomeSection("🪔", "উপনিষদ", HomeAction.Soon),
@@ -360,6 +363,7 @@ class ShellActivity : AppCompatActivity() {
             HomeAction.Mahabharata -> startActivity(Intent(this, MahabharataActivity::class.java))
             HomeAction.Gita -> startActivity(Intent(this, GitaActivity::class.java))
             HomeAction.Library -> show(Tab.LIBRARY)
+            HomeAction.Agent -> startActivity(Intent(this, AgentActivity::class.java))
             HomeAction.Soon ->
                 Toast.makeText(this, "${section.label} শীঘ্রই আসছে", Toast.LENGTH_SHORT).show()
         }
@@ -862,6 +866,9 @@ class ShellActivity : AppCompatActivity() {
                         .build()
                     val req = okhttp3.Request.Builder().url(info.apkUrl).build()
                     client.newCall(req).execute().use { resp ->
+                        if (!resp.isSuccessful) {
+                            throw Exception("HTTP ${resp.code} — APK পাওয়া যায়নি")
+                        }
                         val body = resp.body
                             ?: throw Exception("Empty response")
                         val total = body.contentLength()
@@ -882,6 +889,24 @@ class ShellActivity : AppCompatActivity() {
                             }
                         }
                     }
+                }
+
+                // Android 8+: the user must allow "install unknown apps" for
+                // this app first; otherwise the installer silently refuses.
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O &&
+                    !packageManager.canRequestPackageInstalls()
+                ) {
+                    startActivity(
+                        android.content.Intent(
+                            android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            android.net.Uri.parse("package:$packageName")
+                        )
+                    )
+                    bar.visibility = View.GONE
+                    label.visibility = View.GONE
+                    btn.text = "অনুমতি দিয়ে আবার চেষ্টা করুন"
+                    btn.isEnabled = true
+                    return@launch
                 }
 
                 // Fire the system installer
@@ -905,6 +930,13 @@ class ShellActivity : AppCompatActivity() {
                 label.visibility = View.GONE
                 btn.text = "ত্রুটি হয়েছে — আবার চেষ্টা করুন"
                 btn.isEnabled = true
+                // Surface the real cause instead of swallowing it
+                android.util.Log.e("SwadhyayUpdate", "Update failed", e)
+                android.widget.Toast.makeText(
+                    this@ShellActivity,
+                    e.message ?: e.javaClass.simpleName,
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
             }
         }
     }
