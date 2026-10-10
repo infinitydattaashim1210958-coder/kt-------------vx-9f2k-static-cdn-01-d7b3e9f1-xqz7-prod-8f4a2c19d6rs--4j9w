@@ -84,6 +84,7 @@
         <activity
             android:name=".presentation.agent.AgentActivity"
             android:exported="false"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.Swadhyay.NoBar" />
         <service
             android:name=".service.MantraPlayerService"
@@ -107,18 +108,6 @@
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
-        </provider>
-    
-        <!-- FileProvider: makes the downloaded APK file securely readable
-             by the system PackageInstaller without exposing the file path -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_provider_paths" />
         </provider>
 
         <!-- WorkManager uses RECEIVE_BOOT_COMPLETED to reschedule workers
