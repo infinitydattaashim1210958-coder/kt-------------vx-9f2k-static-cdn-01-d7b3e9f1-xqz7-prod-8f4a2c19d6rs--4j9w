@@ -1,8 +1,10 @@
 package com.kyronix.swadhyaa.presentation.audio
 
 import android.content.Context
+import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
 import android.util.TypedValue
 import android.view.Gravity
@@ -31,17 +33,20 @@ class MantraAudioPlayerView @JvmOverloads constructor(
     private fun dp(v: Number) = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), dm).toInt()
     private fun sp(v: Number) = v.toFloat()
 
-    private val vLabel:     TextView
-    private val vPlayerRow: LinearLayout
-    private val vPlayBtn:   TextView
-    private val vSeek:      SeekBar
-    private val vTime:      TextView
-    private val vModeBtn:   LinearLayout
-    private val vModeIcon:  TextView
-    private val vModeLbl:   TextView
-    private val vStatusRow: LinearLayout
-    private val vSpinner:   ProgressBar
-    private val vStatus:    TextView
+    private val vLabel:          TextView
+    private val vPlayerRow:      LinearLayout
+    private val vPlayBtn:        TextView
+    private val vSeek:           SeekBar
+    private val vTime:           TextView
+    private val vPlayerLaunchBtn: LinearLayout   // opens ListeningModeActivity directly
+    private val vPlayerLaunchIcon: TextView
+    private val vPlayerLaunchLbl:  TextView
+    private val vModeBtn:        LinearLayout
+    private val vModeIcon:       TextView
+    private val vModeLbl:        TextView
+    private val vStatusRow:      LinearLayout
+    private val vSpinner:        ProgressBar
+    private val vStatus:         TextView
 
     private var vm: AudioPlayerViewModel? = null
     private var isSeeking = false
@@ -135,6 +140,36 @@ class MantraAudioPlayerView @JvmOverloads constructor(
 
         vPlayerRow.addView(divider())
 
+        // ── Dedicated "Audio Player" launch button (opens ListeningModeActivity) ──
+        vPlayerLaunchBtn = LinearLayout(context).apply {
+            orientation = VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(dp(6), dp(2), dp(4), dp(2))
+            background = GradientDrawable().apply {
+                shape        = GradientDrawable.RECTANGLE
+                cornerRadius = dp(8f)
+                setColor(Color.argb(40, 255, 154, 60))  // subtle saffron tint
+            }
+            setOnClickListener {
+                // Enable listening mode in service first, then open the UI
+                vm?.setListeningMode(true)
+                context.startActivity(
+                    Intent(context, ListeningModeActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                )
+            }
+        }
+        vPlayerLaunchIcon = tv("🎧", 17f, cGold).apply { gravity = Gravity.CENTER }
+        vPlayerLaunchLbl  = tv("Audio\nPlayer", 8f, cGold).apply {
+            gravity = Gravity.CENTER; maxLines = 2
+        }
+        vPlayerLaunchBtn.addView(vPlayerLaunchIcon, lp(WC, WC))
+        vPlayerLaunchBtn.addView(vPlayerLaunchLbl,  lp(WC, WC))
+        vPlayerRow.addView(vPlayerLaunchBtn, lp(dp(58), WC).apply { marginStart = dp(2) })
+
+        vPlayerRow.addView(divider())
+
+        // ── Reading / Listening mode toggle button (existing) ──────────────────
         vModeBtn = LinearLayout(context).apply {
             orientation = VERTICAL
             gravity = Gravity.CENTER
@@ -143,6 +178,13 @@ class MantraAudioPlayerView @JvmOverloads constructor(
                 val svc = vm ?: return@setOnClickListener
                 val nowListening = svc.state.value.isListeningMode
                 svc.setListeningMode(!nowListening)
+                // If enabling listening mode, also open the full player screen
+                if (!nowListening) {
+                    context.startActivity(
+                        Intent(context, ListeningModeActivity::class.java)
+                            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    )
+                }
             }
         }
         vModeIcon = tv("📖", 18f, cMuted).apply { gravity = Gravity.CENTER }
@@ -178,6 +220,7 @@ class MantraAudioPlayerView @JvmOverloads constructor(
             MantraPlaybackState.Idle -> {
                 if (!audioAvailableForCurrent) {
                     vPlayerRow.visibility = GONE
+                    vPlayerLaunchBtn.visibility = GONE
                     showStatus(spinner = false,
                         text  = "এই মন্ত্রের অডিও পাওয়া যায়নি",
                         color = cMuted)
@@ -187,6 +230,7 @@ class MantraAudioPlayerView @JvmOverloads constructor(
             }
             MantraPlaybackState.Loading -> {
                 vPlayerRow.visibility = GONE
+                vPlayerLaunchBtn.visibility = GONE
                 showStatus(spinner = true, text = "লোড হচ্ছে...", color = cMuted)
             }
             is MantraPlaybackState.Playing,
@@ -194,6 +238,7 @@ class MantraAudioPlayerView @JvmOverloads constructor(
                 if (isFreshForThisCard(s)) { renderIdleFresh(); return }
 
                 vPlayerRow.visibility = VISIBLE
+                vPlayerLaunchBtn.visibility = VISIBLE
                 hideStatus()
 
                 val playing   = s is MantraPlaybackState.Playing
@@ -224,12 +269,14 @@ class MantraAudioPlayerView @JvmOverloads constructor(
             }
             MantraPlaybackState.NotAvailable -> {
                 vPlayerRow.visibility = GONE
+                vPlayerLaunchBtn.visibility = GONE
                 showStatus(spinner = false,
                     text  = "এই মন্ত্রের অডিও পাওয়া যায়নি",
                     color = cMuted)
             }
             is MantraPlaybackState.Error -> {
                 vPlayerRow.visibility = GONE
+                vPlayerLaunchBtn.visibility = GONE
                 showStatus(spinner = false,
                     text  = "⚠  ${s.message}",
                     color = cError)
@@ -244,7 +291,9 @@ class MantraAudioPlayerView @JvmOverloads constructor(
      */
     private fun renderIdleFresh() {
         hideStatus()
-        vPlayerRow.visibility = VISIBLE
+        vPlayerRow.visibility       = VISIBLE
+        // Show the launch button only when audio is available
+        vPlayerLaunchBtn.visibility = if (audioAvailableForCurrent) VISIBLE else GONE
         vPlayBtn.text = "▶"
         vPlayBtn.setTextColor(cGold)
         if (!isSeeking) {
