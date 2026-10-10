@@ -26,7 +26,6 @@ android {
         buildConfigField("String", "GITHUB_REPO",
             "\"${System.getenv("GITHUB_REPOSITORY") ?: ""}\""
         )
-        buildConfigField("String", "GEMINI_API_KEY", "\"${localProps.getProperty("gemini_api_key", "")}\"")
     }
 
     flavorDimensions += "env"
@@ -75,6 +74,8 @@ dependencies {
     implementation("androidx.media:media:1.7.0")
 
     implementation("androidx.work:work-runtime-ktx:2.9.0")
+    // WebViewAssetLoader: serves assets/agent/* on an https origin (Puter.js sign-in needs a real origin)
+    implementation("androidx.webkit:webkit:1.11.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
     testImplementation("org.json:json:20240303")
