@@ -41,3 +41,10 @@ APK BUILD PASSED
 2. Commit to `main`.
 3. Open **Actions** tab and wait for green.
 4. Download the APK artifact.
+
+## শাস্ত্র-সহায়ক (Puter.js agent)
+
+- Page + logic: `app/src/main/assets/agent/` (`core.js` pure logic, `app.js` UI/Puter, `index.html`).
+- Evidence: `data/agent/GroundedRetriever.kt` (on-device DBs only, never downloads) via `AgentBridge`.
+- AI cost is billed to each user's own Puter account (User-Pays). No API key in the app.
+- JS tests: `cd agent-tests && npm i jsdom@24 && node core.test.js .. && node smoke.test.js ..`
