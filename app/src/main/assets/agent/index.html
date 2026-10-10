@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="bn">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>শাস্ত্র-সহায়ক</title>
+<style>
+  @font-face { font-family: 'HindSiliguri'; src: url('fonts/hind_siliguri_regular.ttf'); }
+  @font-face { font-family: 'NotoDev'; src: url('/assets/fonts/noto_serif_devanagari.ttf'); }
+  :root { --bg:#07080A; --surface:#111318; --elev:#1A1D24; --border:#2A2E38; --ivory:#EDE6D6; --muted:#8D92A0;
+          --gold:#D4A24C; --gold2:#F0C26A; --bad:#E8756C; --ok:#6FCF97; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; margin:0; background:var(--bg); color:var(--ivory);
+              font-family:'HindSiliguri','NotoDev',sans-serif; font-size:15px; }
+  #app { display:flex; flex-direction:column; height:100dvh; }
+  header { display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--surface); border-bottom:1px solid var(--border); }
+  header h1 { flex:1; margin:0; font-size:17px; color:var(--gold); font-weight:600; }
+  header button { background:none; border:0; color:var(--muted); font-size:20px; padding:6px 10px; }
+  #bar { height:3px; background:transparent; overflow:hidden; }
+  #bar.on::after { content:''; display:block; height:100%; width:35%; background:var(--gold); animation:slide 1s infinite linear; }
+  @keyframes slide { from{transform:translateX(-100%)} to{transform:translateX(300%)} }
+  #log { flex:1; overflow-y:auto; padding:12px; -webkit-overflow-scrolling:touch; }
+  .msg { max-width:92%; margin:0 0 10px; padding:10px 14px; border-radius:16px; border:1px solid var(--border); line-height:1.6; word-wrap:break-word; }
+  .user { margin-left:auto; background:var(--elev); border-color:var(--gold); white-space:pre-wrap; }
+  .bot { background:var(--surface); }
+  .status { color:var(--muted); font-size:13px; border-style:dashed; }
+  .badge { font-size:12px; margin:0 0 6px; font-weight:600; }
+  .badge.ok { color:var(--ok); } .badge.part { color:var(--gold2); } .badge.no { color:var(--bad); } .badge.off { color:var(--muted); }
+  .claim { margin:0 0 8px; }
+  sup a { color:var(--gold2); text-decoration:none; font-size:11px; padding:0 1px; }
+  .note { color:var(--muted); font-size:12.5px; margin:6px 0 0; }
+  .note.warn { color:var(--gold2); }
+  details { margin:6px 0 0; border:1px solid var(--border); border-radius:10px; background:var(--bg); }
+  details > summary { padding:7px 10px; font-size:12.5px; color:var(--gold); cursor:pointer; }
+  details .src { padding:8px 10px; white-space:pre-wrap; font-size:14px; border-top:1px solid var(--border); }
+  .group-title { margin:10px 0 2px; font-size:12px; color:var(--muted); }
+  #panel { display:none; padding:10px 12px; background:var(--surface); border-bottom:1px solid var(--border); font-size:13.5px; }
+  #panel.open { display:block; }
+  #panel label { display:block; margin:5px 0; }
+  #panel input[type=text] { width:100%; padding:7px 9px; margin-top:4px; background:var(--elev); border:1px solid var(--border); color:var(--ivory); border-radius:8px; }
+  #panel .btn { margin-top:8px; padding:7px 12px; background:var(--elev); color:var(--ivory); border:1px solid var(--border); border-radius:8px; }
+  footer { display:flex; gap:8px; align-items:flex-end; padding:8px 10px calc(8px + env(safe-area-inset-bottom)); background:var(--surface); border-top:1px solid var(--border); }
+  #q { flex:1; resize:none; max-height:120px; padding:10px 14px; border-radius:20px; border:1px solid var(--border);
+       background:var(--elev); color:var(--ivory); font:inherit; outline:none; }
+  #send { width:44px; height:44px; border-radius:22px; border:1px solid var(--border); background:var(--elev); color:var(--gold); font-size:18px; }
+  #send:disabled { opacity:.4; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>শাস্ত্র-সহায়ক ✦</h1>
+    <button id="gear" aria-label="সেটিংস">⚙</button>
+    <button id="clear" aria-label="ইতিহাস মুছুন">🗑</button>
+  </header>
+  <div id="panel">
+    <div><b>AI মডেল</b> <span style="color:var(--muted)">(খরচ আপনার Puter অ্যাকাউন্ট থেকে; প্রতি মাসে ফ্রি অ্যালাউন্স আছে)</span></div>
+    <label><input type="radio" name="mode" value="saver"> সাশ্রয়ী (সব ধাপে gpt-5.4-nano)</label>
+    <label><input type="radio" name="mode" value="balanced"> ভারসাম্য (উত্তর ও যাচাই: claude-sonnet-5)</label>
+    <label><input type="radio" name="mode" value="custom"> নিজের model ID
+      <input type="text" id="custom" placeholder="যেমন: gpt-5.6-luna"></label>
+    <label><input type="checkbox" id="verify"> দ্বিতীয় AI-যাচাই (বেশি নির্ভুল, বেশি খরচ)</label>
+    <button class="btn" id="signout">Puter থেকে সাইন-আউট</button>
+  </div>
+  <div id="bar"></div>
+  <div id="log"></div>
+  <footer>
+    <textarea id="q" rows="1" placeholder="প্রশ্ন করুন…"></textarea>
+    <button id="send" aria-label="পাঠান">➤</button>
+  </footer>
+</div>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
