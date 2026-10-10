@@ -71,9 +71,6 @@ jobs:
           test -f app/src/main/assets/databases/ramayana_core.db
           echo "Assets present"
 
-      - name: Write local.properties
-        run: echo "gemini_api_key=${{ secrets.GEMINI_API_KEY }}" >> local.properties
-
       - name: Run unit tests (includes real DB count verification)
         run: ./gradlew :app:testDevDebugUnitTest --stacktrace
 
