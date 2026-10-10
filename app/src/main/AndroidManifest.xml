@@ -76,6 +76,15 @@
             android:name=".presentation.gita.GitaActivity"
             android:exported="false"
             android:theme="@style/Theme.Swadhyay.NoBar" />
+        <activity
+            android:name=".presentation.audio.ListeningModeActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Swadhyay.NoBar" />
+        <activity
+            android:name=".presentation.agent.AgentActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Swadhyay.NoBar" />
         <service
             android:name=".service.MantraPlayerService"
             android:foregroundServiceType="mediaPlayback"
