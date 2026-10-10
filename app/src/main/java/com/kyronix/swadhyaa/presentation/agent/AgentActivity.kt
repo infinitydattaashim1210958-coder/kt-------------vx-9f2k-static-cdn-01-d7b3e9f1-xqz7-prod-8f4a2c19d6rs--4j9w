@@ -1,381 +1,163 @@
 package com.kyronix.swadhyaa.presentation.agent
 
-import android.content.Context
-import android.graphics.Color
-import android.graphics.Typeface
+import android.annotation.SuppressLint
+import android.app.Dialog
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
-import android.text.InputType
-import android.view.Gravity
-import android.view.View
+import android.os.Message
 import android.view.ViewGroup
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
-import android.widget.*
-import androidx.activity.viewModels
+import android.view.Window
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
-import com.kyronix.swadhyaa.data.prefs.SettingsRepository
-import com.kyronix.swadhyaa.data.repository.AnswerMode
+import androidx.webkit.WebViewAssetLoader
+import com.kyronix.swadhyaa.data.agent.AgentBridge
+import com.kyronix.swadhyaa.data.agent.GroundedRetriever
 import com.kyronix.swadhyaa.ui.theme.AppColors
-import com.kyronix.swadhyaa.ui.theme.FontManager
-import com.kyronix.swadhyaa.ui.theme.GlowBox
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 
 /**
- * AI scripture agent — chat UI.
+ * শাস্ত্র-সহায়ক — Puter.js-powered, database-grounded scripture agent.
  *
- * Launch from ShellActivity (or anywhere):
- *   startActivity(Intent(this, AgentActivity::class.java))
- *
- * Add to AndroidManifest.xml:
- *   <activity android:name=".presentation.agent.AgentActivity"
- *             android:exported="false"
- *             android:windowSoftInputMode="adjustResize"
- *             android:theme="@style/Theme.Swadhyay" />
+ *  - The chat UI + agent pipeline are web assets (assets/agent/*) served over https://appassets.androidplatform.net
+ *    through WebViewAssetLoader. Puter identifies an app by its web origin, and file:// has none, so a real
+ *    https origin is required for sign-in to work.
+ *  - AI calls (puter.ai.chat) run in that page and are billed to the signed-in USER's Puter account
+ *    (Puter "User-Pays" model) — the developer pays nothing and ships no API key.
+ *  - Evidence comes from the on-device databases through [AgentBridge]. Nothing is downloaded automatically.
+ *  - puter.auth.signIn() opens a popup window; WebView needs onCreateWindow to host it (below).
  */
 class AgentActivity : AppCompatActivity() {
 
-    private val vm: AgentViewModel by viewModels()
-    private val density by lazy { resources.displayMetrics.density }
-    private fun dp(v: Int) = (v * density).toInt()
+    private lateinit var webView: WebView
+    private var popupDialog: Dialog? = null
+    private var popupView: WebView? = null
 
-    private lateinit var messagesLayout: LinearLayout
-    private lateinit var scrollView: ScrollView
-    private lateinit var inputField: EditText
-    private lateinit var sendButton: ImageButton
-    private lateinit var loadingBar: ProgressBar
+    private val assetLoader by lazy {
+        WebViewAssetLoader.Builder()
+            .setDomain(AGENT_HOST)
+            .addPathHandler("/assets/", WebViewAssetLoader.AssetsPathHandler(this))
+            .build()
+    }
 
-    // BUGFIX (font not applying app-wide): the chat screen never consulted
-    // the user's font settings — bubbles and the input field always used
-    // the system font regardless of Settings. Resolved the same way
-    // ReaderActivity/GitaActivity already do it.
-    private lateinit var banglaTypeface: Typeface
-
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Resolve the Bangla font from user settings before UI is built.
-        val settings = runBlocking { SettingsRepository(this@AgentActivity).settingsFlow.first() }
-        banglaTypeface = FontManager.banglaTypeface(this, settings.banglaFont)
-
-        val root = buildUi()
+        val root = FrameLayout(this).apply { setBackgroundColor(AppColors.bg) }
+        webView = WebView(this).apply {
+            setBackgroundColor(AppColors.bg)
+            layoutParams = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        }
+        root.addView(webView)
         setContentView(root)
 
-        lifecycleScope.launch {
-            vm.uiState.collectLatest { state ->
-                renderMessages(state.messages)
-                loadingBar.visibility = if (state.isLoading) View.VISIBLE else View.GONE
-                sendButton.isEnabled = !state.isLoading
-                sendButton.alpha = if (state.isLoading) 0.4f else 1f
+        webView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true                 // Puter keeps its session token in localStorage
+            javaScriptCanOpenWindowsAutomatically = true
+            setSupportMultipleWindows(true)          // sign-in popup
+            allowFileAccess = false
+            allowContentAccess = false
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+        }
+        webView.addJavascriptInterface(AgentBridge(GroundedRetriever(applicationContext)), "SwadhyayAgent")
+
+        webView.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+                assetLoader.shouldInterceptRequest(request.url)
+
+            // Keep the agent page on its own origin; links elsewhere open in the system browser.
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                val u = request.url
+                if (u.host == AGENT_HOST) return false
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, u)) }
+                return true
             }
         }
-    }
-
-    // ── UI Builder ────────────────────────────────────────────────────
-
-    private fun buildUi(): View {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(AppColors.bg)
-            layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onCreateWindow(view: WebView, isDialog: Boolean, isUserGesture: Boolean, resultMsg: Message): Boolean =
+                openPopup(resultMsg)
+            override fun onCloseWindow(window: WebView) { closePopup() }
         }
 
-        // Toolbar
-        root.addView(buildToolbar())
-
-        // Loading indicator (below toolbar, above messages)
-        loadingBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            isIndeterminate = true
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(3)
-            )
-            progressDrawable = null
-            indeterminateDrawable?.setTint(AppColors.saffron)
-            visibility = View.GONE
-        }
-        root.addView(loadingBar)
-
-        // Messages scroll area
-        messagesLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-        }
-        scrollView = ScrollView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-            )
-            addView(messagesLayout)
-            isSmoothScrollingEnabled = true
-        }
-        root.addView(scrollView)
-
-        // Divider
-        root.addView(View(this).apply {
-            setBackgroundColor(AppColors.border)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(1)
-            )
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (popupDialog != null) closePopup() else finish()
+            }
         })
 
-        // Input bar
-        root.addView(buildInputBar())
-
-        return root
+        if (savedInstanceState == null) webView.loadUrl(pageUrl()) else webView.restoreState(savedInstanceState)
     }
 
-    private fun buildToolbar(): View {
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(AppColors.surface)
-            setPadding(dp(4), 0, dp(8), 0)
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(56)
-            )
-        }
-
-        // Back button
-        val back = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_media_previous)
-            setColorFilter(AppColors.ivory)
-            setBackgroundColor(Color.TRANSPARENT)
-            layoutParams = LinearLayout.LayoutParams(dp(48), dp(48))
-            contentDescription = "ফিরে যান"
-            setOnClickListener { onBackPressedDispatcher.onBackPressed() }
-        }
-        bar.addView(back)
-
-        // Title
-        val title = TextView(this).apply {
-            text = "শাস্ত্র-সহায়ক ✦"
-            textSize = 17f
-            setTextColor(AppColors.gold)
-            typeface = Typeface.DEFAULT_BOLD
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setPadding(dp(8), 0, 0, 0)
-        }
-        bar.addView(title)
-
-        // Clear history button
-        val clear = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_delete)
-            setColorFilter(AppColors.muted)
-            setBackgroundColor(Color.TRANSPARENT)
-            layoutParams = LinearLayout.LayoutParams(dp(40), dp(40))
-            contentDescription = "ইতিহাস মুছুন"
-            setOnClickListener { vm.clearHistory() }
-        }
-        bar.addView(clear)
-
-        return bar
-    }
-
-    private fun buildInputBar(): View {
-        val bar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.BOTTOM
-            setBackgroundColor(AppColors.surface)
-            setPadding(dp(12), dp(8), dp(8), dp(8))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        }
-
-        inputField = EditText(this).apply {
-            hint = "প্রশ্ন করুন…"
-            setHintTextColor(AppColors.muted)
-            setTextColor(AppColors.ivory)
-            textSize = 15f
-            typeface = banglaTypeface
-            setPadding(dp(16), dp(10), dp(16), dp(10))
-            inputType = InputType.TYPE_CLASS_TEXT or
-                    InputType.TYPE_TEXT_FLAG_CAP_SENTENCES or
-                    InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            maxLines = 4
-            imeOptions = EditorInfo.IME_ACTION_SEND
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            setOnEditorActionListener { _, actionId, _ ->
-                if (actionId == EditorInfo.IME_ACTION_SEND) {
-                    doSend(); true
-                } else false
+    /** Hosts Puter's sign-in popup in a dialog; the popup talks back to the opener via postMessage. */
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun openPopup(resultMsg: Message): Boolean {
+        closePopup()
+        val popup = WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.javaScriptCanOpenWindowsAutomatically = true
+            webViewClient = WebViewClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onCloseWindow(window: WebView) { closePopup() }
             }
         }
-        GlowBox.applyTo(inputField, GlowBox.panel(this, color = AppColors.border, fillColor = AppColors.elevated, cornerRadiusDp = 20f))
-        bar.addView(inputField)
-
-        bar.addView(View(this).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(8), 1)
-        })
-
-        sendButton = ImageButton(this).apply {
-            setImageResource(android.R.drawable.ic_menu_send)
-            setColorFilter(AppColors.saffron)
-            setPadding(dp(10), dp(10), dp(10), dp(10))
-            layoutParams = LinearLayout.LayoutParams(dp(44), dp(44))
-            contentDescription = "পাঠান"
-            setOnClickListener { doSend() }
+        val dialog = Dialog(this, android.R.style.Theme_Black_NoTitleBar).apply {
+            requestWindowFeature(Window.FEATURE_NO_TITLE)
+            setContentView(popup)
+            setOnCancelListener { closePopup() }
+            window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
         }
-        // haloDp = 0: this button has a FIXED 44x44dp size (not WRAP_CONTENT),
-        // so growing its padding would shrink the icon's own room instead of
-        // enlarging the button — the glow rings still render, just flush
-        // with the existing bounds instead of bleeding outside them.
-        GlowBox.applyTo(
-            sendButton,
-            GlowBox.panel(this, color = AppColors.border, fillColor = AppColors.elevated, cornerRadiusDp = 22f),
-            haloDp = 0
-        )
-        bar.addView(sendButton)
-
-        return bar
+        popupView = popup
+        popupDialog = dialog
+        val transport = resultMsg.obj as WebView.WebViewTransport
+        transport.webView = popup
+        resultMsg.sendToTarget()
+        dialog.show()
+        return true
     }
 
-    // ── Rendering ─────────────────────────────────────────────────────
-
-    private fun renderMessages(messages: List<ChatMessage>) {
-        messagesLayout.removeAllViews()
-        messages.forEach { msg ->
-            messagesLayout.addView(buildBubble(msg))
-            messagesLayout.addView(spacer(dp(8)))
-        }
-        // Auto-scroll to bottom
-        scrollView.post { scrollView.fullScroll(ScrollView.FOCUS_DOWN) }
+    private fun closePopup() {
+        popupDialog?.let { runCatching { it.dismiss() } }
+        popupView?.let { runCatching { it.stopLoading(); it.destroy() } }
+        popupDialog = null
+        popupView = null
     }
 
-    private fun buildBubble(msg: ChatMessage): View {
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = if (msg.isUser) Gravity.END else Gravity.START
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        }
-
-        // Bubble wrapper to align left/right
-        val bubbleRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = if (msg.isUser) Gravity.END else Gravity.START
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        }
-
-        val bubbleBg = if (msg.isUser) AppColors.elevated else AppColors.surface
-        val bubbleBorder = if (msg.isUser) AppColors.gold else AppColors.border
-
-        val bubble = TextView(this).apply {
-            text = msg.text
-            textSize = 14.5f
-            setTextColor(if (msg.isUser) AppColors.ivory else AppColors.ivory)
-            typeface = banglaTypeface
-            setPadding(dp(14), dp(10), dp(14), dp(10))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                // Max 85% of screen width
-                val maxW = (resources.displayMetrics.widthPixels * 0.85).toInt()
-                width = ViewGroup.LayoutParams.WRAP_CONTENT
-                this.weight = 0f
-            }
-        }
-        GlowBox.applyTo(bubble, GlowBox.panel(this, color = bubbleBorder, fillColor = bubbleBg, cornerRadiusDp = 16f), haloDp = 5)
-        bubbleRow.addView(bubble)
-        container.addView(bubbleRow)
-
-        // Mode badge (for bot messages)
-        if (!msg.isUser && msg.mode != null) {
-            val badge = buildModeBadge(msg.mode, msg.errorMessage)
-            container.addView(badge)
-        }
-
-        // Sources (for bot messages with search hits)
-        if (!msg.isUser && msg.sources.isNotEmpty()) {
-            container.addView(buildSourcesView(msg.sources))
-        }
-
-        return container
+    private fun pageUrl(): String {
+        fun hex(c: Int) = String.format("#%06X", 0xFFFFFF and c)
+        return Uri.Builder().scheme("https").authority(AGENT_HOST).path("/assets/agent/index.html")
+            .appendQueryParameter("gold", hex(AppColors.gold))
+            .appendQueryParameter("gold2", hex(AppColors.goldBright))
+            .build().toString()
     }
 
-    private fun buildModeBadge(mode: AnswerMode, error: String?): View {
-        val (label, color) = when (mode) {
-            AnswerMode.ONLINE_AI ->
-                "✓ AI উত্তর (Gemini)" to AppColors.saffron
-            AnswerMode.OFFLINE_SEARCH ->
-                "📴 অফলাইন — স্থানীয় অনুসন্ধান" to AppColors.muted
-            AnswerMode.OFFLINE_FALLBACK ->
-                "⚠ AI ব্যর্থ — স্থানীয় ফলাফল" to AppColors.vermilion
-        }
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.START
-            addView(TextView(this@AgentActivity).apply {
-                text = label
-                textSize = 10.5f
-                setTextColor(color)
-                setPadding(dp(4), dp(2), 0, 0)
-            })
-            if (error != null) {
-                addView(TextView(this@AgentActivity).apply {
-                    text = error
-                    textSize = 10f
-                    setTextColor(AppColors.vermilion)
-                    setPadding(dp(4), 0, 0, 0)
-                })
-            }
-        }
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        webView.saveState(outState)
     }
 
-    private fun buildSourcesView(sources: List<String>): View {
-        val wrap = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(4), dp(4), 0, 0)
-        }
-        val header = TextView(this).apply {
-            text = "📚 সূত্র:"
-            textSize = 10.5f
-            setTextColor(AppColors.muted)
-        }
-        wrap.addView(header)
-        sources.take(4).forEach { src ->
-            wrap.addView(TextView(this).apply {
-                text = "  • $src"
-                textSize = 10.5f
-                setTextColor(AppColors.muted)
-            })
-        }
-        return wrap
+    override fun onDestroy() {
+        closePopup()
+        webView.removeJavascriptInterface("SwadhyayAgent")
+        (webView.parent as? ViewGroup)?.removeView(webView)
+        webView.destroy()
+        super.onDestroy()
     }
 
-    // ── Actions ───────────────────────────────────────────────────────
-
-    private fun doSend() {
-        val text = inputField.text.toString().trim()
-        if (text.isEmpty()) return
-        inputField.setText("")
-        hideKeyboard()
-        vm.sendMessage(text)
-    }
-
-    private fun hideKeyboard() {
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.hideSoftInputFromWindow(inputField.windowToken, 0)
-    }
-
-    // ── Drawing helpers ───────────────────────────────────────────────
-
-    private fun spacer(height: Int): View = View(this).apply {
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, height
-        )
+    companion object {
+        /**
+         * Puter treats the page's origin as "your app". The default AssetLoader domain is shared by every
+         * app that uses it; change this to a hostname you own (it is never fetched — requests are
+         * intercepted locally) if you want Puter to see this app under its own identity.
+         */
+        private const val AGENT_HOST = "appassets.androidplatform.net"
     }
 }
