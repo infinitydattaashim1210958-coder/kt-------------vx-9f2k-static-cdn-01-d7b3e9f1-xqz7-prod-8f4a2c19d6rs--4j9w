@@ -8,9 +8,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:16281592902:android:c397fc8038454089969647",
+        "mobilesdk_app_id": "1:16281592902:android:591ac9993c43233f969647",
         "android_client_info": {
-          "package_name": "com.kyronix.swadhyaa"
+          "package_name": "com.kyronix.swadhyaa.dev"
         }
       },
       "oauth_client": [],
