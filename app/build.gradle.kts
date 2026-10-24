@@ -73,7 +73,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     // MediaSession + MediaStyle notification support
     implementation("androidx.media:media:1.7.0")
-    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
+    implementation(platform("com.google.firebase:firebase-bom:35.7.0"))
     implementation("com.google.firebase:firebase-analytics")
 
     implementation("androidx.work:work-runtime-ktx:2.9.0")
