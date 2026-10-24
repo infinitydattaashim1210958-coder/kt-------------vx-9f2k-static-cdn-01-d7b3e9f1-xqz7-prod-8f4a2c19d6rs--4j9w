@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "16281592902",
+    "firebase_url": "https://private-efc83-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "private-efc83",
+    "storage_bucket": "private-efc83.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:16281592902:android:591ac9993c43233f969647",
+        "android_client_info": {
+          "package_name": "com.kyronix.swadhyaa.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkucveCoII0KEFsNj4XQEXpGLxAPq9K6Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
