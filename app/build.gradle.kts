@@ -6,6 +6,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("kotlin-parcelize")
+    id("com.google.gms.google-services")
 }
 
 val localProps = Properties().apply {
@@ -72,6 +73,8 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     // MediaSession + MediaStyle notification support
     implementation("androidx.media:media:1.7.0")
+    implementation(platform("com.google.firebase:firebase-bom:35.1.0"))
+    implementation("com.google.firebase:firebase-analytics")
 
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     // WebViewAssetLoader: serves assets/agent/* on an https origin (Puter.js sign-in needs a real origin)
