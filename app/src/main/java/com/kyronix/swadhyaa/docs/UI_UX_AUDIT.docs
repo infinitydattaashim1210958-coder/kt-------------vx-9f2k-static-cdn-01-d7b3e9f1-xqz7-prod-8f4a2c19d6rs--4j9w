@@ -1,0 +1,69 @@
+# SWADHYAY UI/UX Audit
+
+**Branch:** `feature/ui-ux-redesign`  
+**Repo HEAD (start):** `b4ed3a2` — *Remove duplicate permissions from AndroidManifest.xml*  
+**Architecture:** Native Kotlin, programmatic Android Views (no Compose).  
+**Primary shell:** `ShellActivity.kt` (~1537 lines) — tabs HOME · LIBRARY · BOOKMARKS · SEARCH · SETTINGS.
+
+## Verified repository facts
+
+| Item | Observation |
+|------|-------------|
+| UI stack | Programmatic Views; Material Components theme; no Compose |
+| Tokens | `ui/theme/AppColors.kt` — dark illuminated-manuscript palette; accents gold/emerald/indigo/violet via `applyAccent()` |
+| Theme pref | `SettingsRepository` stores `theme` (auto/light/dark) but **light has no visual effect** (matches legacy; documented in AppColors) |
+| Fonts | `FontManager`, `FontEnforcer`, `BanglaText` for Indic labels |
+| Glow | `GlowBox` — decorative accent border helper used on some cards |
+| Prefs | DataStore `swadhyay_prefs` via `UserPrefs` + `SettingsRepository` |
+| DBs | Bundled `core.db` / `ramayana_core.db` — **protected**; CI database gate |
+| CI | `.github/workflows/android.yml`, `release.yml` |
+| common | `presentation/common/BanglaText.kt` only |
+
+## Screen / flow inventory (from source)
+
+### Shell tabs (`ShellActivity`)
+
+| Tab | Render | Notes |
+|-----|--------|-------|
+| HOME | `renderHome()` | Title + motto; optional Continue card; grid of `homeSections` |
+| LIBRARY | `renderLibrary()` | Catalog via `LibraryRepository`; download/open DB or HTML readers |
+| BOOKMARKS | `renderBookmarks()` | From `UserPrefs.bookmarksFlow`; empty state text |
+| SEARCH | `renderSearch()` | `SearchRepository`; job cancellation present |
+| SETTINGS | `renderSettings()` + sub-screens | Nested via `settingsScreen` string |
+
+### Home catalogue (`homeSections` / `HomeAction`)
+
+| Action | Status |
+|--------|--------|
+| Vedas, Ramayana, Mahabharata, Gita, Library, Agent | Implemented → Activities / tab |
+| Purana, Brahmana, Upanishad, Aranyaka, Nirukta, Chanda, Shiksha, Tantra, Smriti, Grihya, Dharma | `HomeAction.Soon` → Toast “শীঘ্রই আসছে” |
+
+**Invariant:** Do not remove Soon entries or make them look fully available.
+
+### Other Activities (opened from shell)
+
+Reader, Ramayana, Mahabharata, Gita, Library*, Agent, ListeningMode, Splash, MainActivity.
+
+### Settings groups (existing)
+
+Reader prefs, Library & Storage, Language, Notifications, Search, Privacy/Legal static pages, Support (contact/feedback/bug/FAQ), About, in-app Update card.
+
+## Concrete usability issues (source-tied)
+
+1. **Tab bar** (`buildTabs`, ~line 159): text-only; selected state is **color alone** (`saffron` vs `muted`); no indicator, no contentDescription, ~12sp labels, padding may under-deliver 48dp targets on some devices.
+2. **Emoji as primary icons** on home grid and settings rows — fine as decorative, weak as sole affordance; no vector alternatives yet.
+3. **Home grid**: enabled vs Soon distinguished mainly by alpha/toast; Soon cards still look tappable without strong “coming soon” chrome.
+4. **Empty states**: Bookmarks has minimal muted text; Library/Search empty/error styling inconsistent.
+5. **GlowBox** on many cards: heavy visual noise vs “restrained accent” goal.
+6. **Shell monolith**: all tab UI inline in one file; hard to keep spacing/typography consistent without shared primitives.
+7. **Settings rows**: emoji + label; no secondary value line for current selection (e.g. accent name).
+8. **Search**: job cancel exists; visual progress/empty hierarchy can be clearer.
+9. **Light theme control**: appears in settings but does not change colors — must not be presented as working end-to-end without implementation (preserve store; label honestly or leave as-is with audit note).
+10. **Continue reading**: only when `continueFlow` non-null; routing for kinds must stay accurate (existing code paths).
+
+## Protected behaviors / invariants
+
+- No Compose migration.
+- No edits to production DB assets, Room schemas, repository ranking, package IDs, flavors, CI semantics.
+- Preserve `HomeAction` dispatch and fu
+... 
